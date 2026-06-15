@@ -24,7 +24,6 @@ export function createScene1(): PIXI.Container {
   const g3 = new PIXI.Graphics()
   const g4 = new PIXI.Graphics()
 
-  // Красный эллипс, повёрнутый на 30°.
   g1.beginFill('#ff0000')
     .drawEllipse(0, 0, 200, 100)
     .endFill()
@@ -34,7 +33,6 @@ export function createScene1(): PIXI.Container {
   g1.eventMode = 'static'
   g1.cursor = 'pointer'
 
-  // Синий прямоугольник, повёрнутый на 15° и масштабированный 1.5×1.7.
   g2.beginFill('#0000ff')
     .drawRect(-50, -75, 100, 150)
     .endFill()
@@ -45,14 +43,12 @@ export function createScene1(): PIXI.Container {
   g2.eventMode = 'static'
   g2.cursor = 'pointer'
 
-  // Белая линия.
   g3.lineStyle(10, '#ffffff', 1)
     .moveTo(0, 0)
     .lineTo(150, 100)
 
   g3.angle = -20
 
-  // Жёлтая линия.
   g4.lineStyle(10, '#ffff00', 1)
     .moveTo(0, 70)
     .lineTo(150, -30)

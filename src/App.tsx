@@ -1,28 +1,346 @@
 import React from 'react'
-
-import './App.css'
+import * as PIXI from 'pixi.js-legacy'
+import { EventBridge } from './core/EventBridge'
+import type {  CanvasKit } from './types/types'
+import { renderPixiContainerToSkia } from './core/SkiaRenderer'
+import { addRandomObject } from './pixi/generators'
+import CanvasKitInit from 'canvaskit-wasm'
 import { SCENES } from './pixi/scene'
 
+const CANVAS_WIDTH = 600
+const CANVAS_HEIGHT = 400
 
-/**
- * 
- * Pixi создаёт сцену.
- * Skia рисует эту же сцену своим способом.
- * Наша задача — перевести Pixi-объекты в Skia-рисование.
- */
-function App() {
-  const [currentScene, setCurrentScene] = React.useState(0)
 
-  const sceneFactory = SCENES[currentScene].factory
-  const scene = React.useMemo(() => sceneFactory(), [currentScene])
+export default function App() {
+  const pixiRootRef = React.useRef<HTMLDivElement | null>(null)
+ const skiaCanvasRef = React.useRef<HTMLCanvasElement | null>(null)
 
-  return (
-    <main className="App">
-      <button onClick={() => setCurrentScene(0)}>Scene 1</button>
-      <button onClick={() => setCurrentScene(1)}>Scene 2</button>
-      <button onClick={() => setCurrentScene(2)}>Scene 3</button>
-    </main>
-  )
+const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']> | null>(null)
+
+  const appRef = React.useRef<PIXI.Application | null>(null)
+  const eventBridgeRef = React.useRef<EventBridge | null>(null)
+
+  const [canvasKit, setCanvasKit] = React.useState<CanvasKit | null>(null)
+  const [currentSceneIndex, setCurrentSceneIndex] = React.useState(0)
+  const [currentScene, setCurrentScene] =React.useState<PIXI.Container | null>(null)
+  const [renderVersion, setRenderVersion] = React.useState(0)
+  const [logs, setLogs] = React.useState<string[]>([])
+
+
+    const addLog = React.useCallback((message: string) => {
+    setLogs((prevLogs) => [message, ...prevLogs].slice(0, 8))
+  }, [])
+
+
+    /**
+   * 1. Создаём PIXI.Application({ forceCanvas: true })
+   */
+  React.useEffect(() => {
+    if (!pixiRootRef.current) {
+      return
+    }
+
+    const app = new PIXI.Application<HTMLCanvasElement>({
+      width: CANVAS_WIDTH,
+      height: CANVAS_HEIGHT,
+      forceCanvas: true,
+      backgroundColor: 0x1f2028,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
+    })
+
+    appRef.current = app
+
+    pixiRootRef.current.appendChild(app.view as HTMLCanvasElement)
+
+    return () => {
+      eventBridgeRef.current?.detach()
+      eventBridgeRef.current = null
+
+      app.destroy(true, { children: true })
+      appRef.current = null
+    }
+  }, [])
+
+
+    /**
+   * 2. Загружаем CanvasKit
+   */
+  React.useEffect(() => {
+    let disposed = false
+
+    CanvasKitInit({
+      locateFile: (file) => {
+        return `https://unpkg.com/canvaskit-wasm@0.41.1/bin/${file}`
+      },
+    }).then((loadedCanvasKit) => {
+      if (!disposed) {
+        setCanvasKit(loadedCanvasKit)
+        addLog('CanvasKit loaded')
+      }
+    })
+
+    return () => {
+      disposed = true
+    }
+  }, [addLog])
+
+
+
+    /**
+   * 3. Создаём Skia surface
+   */
+  React.useEffect(() => {
+    if (!canvasKit) {
+      return
+    }
+
+    const canvas = skiaCanvasRef.current
+
+    if (!canvas) {
+      return
+    }
+
+    canvas.width = CANVAS_WIDTH
+    canvas.height = CANVAS_HEIGHT
+
+    const surface = canvasKit.MakeSWCanvasSurface(canvas)
+
+    if (!surface) {
+      addLog('Skia surface was not created')
+      return
+    }
+
+    skiaSurfaceRef.current = surface
+
+    return () => {
+      surface.dispose()
+      skiaSurfaceRef.current = null
+    }
+  }, [canvasKit, addLog])
+
+  /**
+   * 4. Держим текущую сцену и переключаем сцены
+   */
+  React.useEffect(() => {
+    const app = appRef.current
+
+    if (!app) {
+      return
+    }
+
+    app.stage.removeChildren()
+
+    const scene = SCENES[currentSceneIndex].factory()
+
+    app.stage.addChild(scene)
+    app.render()
+
+    setCurrentScene(scene)
+    eventBridgeRef.current?.setScene(scene)
+
+    addLog(`Scene changed: ${SCENES[currentSceneIndex].label}`)
+  }, [currentSceneIndex, addLog])
+
+
+
+  /**
+   * 5. Подключаем EventBridge к Skia canvas
+   */
+  React.useEffect(() => {
+    const canvas = skiaCanvasRef.current
+
+    if (!canvas || !currentScene) {
+      return
+    }
+
+    const eventBridge = new EventBridge({
+      canvas,
+      scene: currentScene,
+      onPointerDown: (hit) => {
+        addLog(`Skia pointerdown: ${hit.object.constructor.name}`)
+      },
+      onPointerUp: (hit) => {
+        addLog(`Skia pointerup: ${hit.object.constructor.name}`)
+      },
+    })
+
+    eventBridge.attach()
+    eventBridgeRef.current = eventBridge
+
+    return () => {
+      eventBridge.detach()
+
+      if (eventBridgeRef.current === eventBridge) {
+        eventBridgeRef.current = null
+      }
+    }
+  }, [currentScene, addLog])
+
+  /**
+   * 6. Рендерим сцену через Skia
+   */
+  React.useEffect(() => {
+    if (!canvasKit) {
+      return
+    }
+
+    if (!currentScene) {
+      return
+    }
+
+    const surface = skiaSurfaceRef.current
+
+    if (!surface) {
+      return
+    }
+
+    const skCanvas = surface.getCanvas()
+
+    skCanvas.clear(canvasKit.TRANSPARENT)
+
+    renderPixiContainerToSkia(currentScene, {
+      ck: canvasKit,
+      canvas: skCanvas,
+    })
+
+    surface.flush()
+  }, [canvasKit, currentScene, renderVersion])
+
+
+
+const exportPdf = () => {
+  if (!canvasKit || !currentScene) return
+
+  const doc =
+    (canvasKit as any).MakePDFDocument?.() ??
+    (canvasKit as any).MakeSkPDFDocument?.()
+
+  if (!doc) {
+    addLog('ERROR: PDF backend unavailable — need custom WASM build')
+    return
+  }
+
+  const pageCanvas = doc.beginPage(CANVAS_WIDTH, CANVAS_HEIGHT)
+
+  // Белый фон
+  const paint = new canvasKit.Paint()
+  paint.setColor(canvasKit.Color4f(1, 1, 1, 1))
+  paint.setStyle(canvasKit.PaintStyle.Fill)
+  pageCanvas.drawRect(canvasKit.XYWHRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT), paint)
+  paint.delete()
+
+  renderPixiContainerToSkia(currentScene, { ck: canvasKit, canvas: pageCanvas })
+  doc.endPage()
+
+  const bytes: Uint8Array = doc.close()
+  const blob = new Blob([bytes], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'pixiakit-export.pdf'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 3000)
+
+  addLog('PDF exported ✓')
 }
 
-export default App
+  const handleAddRandomObject = () => {
+    if (!currentScene) {
+      return
+    }
+
+    const kind = addRandomObject(currentScene)
+
+    /**
+     * MVP-фикс:
+     * делаем добавленный объект интерактивным,
+     * чтобы EventBridge мог его найти.
+     */
+    const addedObject = currentScene.children[currentScene.children.length - 1]
+
+    if (addedObject) {
+      addedObject.eventMode = 'static'
+      addedObject.cursor = 'pointer'
+    }
+
+    appRef.current?.render()
+
+    setRenderVersion((version) => version + 1)
+
+    addLog(`Added random ${kind}`)
+  }
+
+  return (
+    <main className="main-content">
+      <h1 className="text-3xl font-bold">PixiJS to Skia Renderer</h1>
+      <p>Welcome to the PixiJS to Skia Renderer!</p>
+
+      <section>
+        <h2>Features</h2>
+        <ul>
+          <li>Render PixiJS scenes to Skia canvas</li>
+          <li>Export rendered content as PDF</li>
+        </ul>
+      </section>
+
+      <section className='grid grid-cols-2 gap-8'><section>
+        <h2>PixiJS Scene</h2>
+        <div ref={pixiRootRef} />
+
+      </section>
+
+       <section>
+        <h2>Skia output canvas</h2>
+        <div >
+          <canvas
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          ref={skiaCanvasRef}
+          style={{ border: '1px solid #333' }}
+        />
+        </div>
+
+
+      </section>
+      </section>
+
+              <div style={{ marginTop: 10 }}>
+          <button className="button" onClick={handleAddRandomObject}>
+            Add random shape
+          </button>
+
+
+
+          <button className="button" onClick={exportPdf}>
+            Export PDF
+          </button>
+
+        {SCENES.map((scene, index) => (
+          <button
+            key={scene.label}
+            type="button"
+            className="button"
+            onClick={() => setCurrentSceneIndex(index)}
+          >
+            {scene.label}
+          </button>
+        ))}
+        </div>
+
+  <section className="App__status">
+        <p>
+          CanvasKit: {canvasKit ? 'loaded' : 'loading...'}
+        </p>
+
+        <ul>
+          {logs.map((log, index) => (
+            <li key={`${log}-${index}`}>{log}</li>
+          ))}
+        </ul>
+      </section>
+    </main>
+
+  )
+}
