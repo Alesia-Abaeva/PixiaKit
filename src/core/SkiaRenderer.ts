@@ -46,15 +46,9 @@ function applyTransform(canvas: SkCanvas, obj: PIXI.DisplayObject): void {
   const matrix = obj.worldTransform
 
   canvas.concat([
-    matrix.a,
-    matrix.c,
-    matrix.tx,
-    matrix.b,
-    matrix.d,
-    matrix.ty,
-    0,
-    0,
-    1,
+    matrix.a, matrix.c, matrix.tx,
+    matrix.b, matrix.d, matrix.ty,
+    0, 0, 1,
   ])
 }
 

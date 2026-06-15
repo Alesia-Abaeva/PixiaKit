@@ -145,8 +145,11 @@ export class EventBridge {
 
         continue
       }
+        const worldPoint = new PIXI.Point(x, y)
 
-      const localPoint = child.toLocal(new PIXI.Point(x, y), undefined, undefined, true)
+        const inv = child.worldTransform.clone().invert()
+        const localPoint = inv.apply(worldPoint, new PIXI.Point())
+    //   const localPoint = child.toLocal(new PIXI.Point(x, y), undefined, undefined, true)
       const hit = this.containsDisplayObject(child, localPoint.x, localPoint.y)
 
       if (hit) {
@@ -196,7 +199,8 @@ export class EventBridge {
       return object.containsPoint(new PIXI.Point(localX, localY))
     }
 
-    const bounds = object.getBounds(true)
+    const bounds = object.getLocalBounds()
+    return bounds.contains(localX, localY)
 
     return (
       localX >= bounds.x &&

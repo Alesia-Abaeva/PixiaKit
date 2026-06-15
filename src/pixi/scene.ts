@@ -30,7 +30,7 @@ export function createScene1(): PIXI.Container {
 
   g1.position.set(200, 100)
   g1.angle = 30
-  g1.eventMode = 'static'
+  g1.eventMode = 'dynamic'
   g1.cursor = 'pointer'
 
   g2.beginFill('#0000ff')
@@ -40,7 +40,7 @@ export function createScene1(): PIXI.Container {
   g2.position.set(120, 60)
   g2.angle = 15
   g2.scale.set(1.5, 1.7)
-  g2.eventMode = 'static'
+  g2.eventMode = 'dynamic'
   g2.cursor = 'pointer'
 
   g3.lineStyle(10, '#ffffff', 1)
@@ -95,7 +95,7 @@ export function createScene2(): PIXI.Container {
     .endFill()
   cross.position.set(200, 350)
   cross.angle = 15
-  cross.eventMode = 'static'
+  cross.eventMode = 'dynamic'
   cross.cursor = 'pointer'
 
   const line = new PIXI.Graphics()

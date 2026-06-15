@@ -6,7 +6,7 @@ import { renderPixiContainerToSkia } from './core/SkiaRenderer'
 import { addRandomObject } from './pixi/generators'
 import CanvasKitInit from 'canvaskit-wasm'
 import { SCENES } from './pixi/scene'
-
+import { exportAndDownloadPDF } from './core/SkiaPDFExporter'
 const CANVAS_WIDTH = 600
 const CANVAS_HEIGHT = 400
 
@@ -32,6 +32,7 @@ const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']>
   }, [])
 
 
+  
     /**
    * 1. Создаём PIXI.Application({ forceCanvas: true })
    */
@@ -50,9 +51,28 @@ const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']>
       autoDensity: true,
     })
 
+    app.view.addEventListener('pointerdown', () => {
+  console.log('CANVAS POINTER OK')
+})
+
+app.view.style.touchAction = 'none'
+app.view.style.userSelect = 'none'
+
+
+app.stage.on('pointerdown', () => {
+  console.log('PIXI STAGE CLICK OK')
+})
+
     appRef.current = app
+     app.stage.eventMode = 'dynamic'
 
     pixiRootRef.current.appendChild(app.view as HTMLCanvasElement)
+    
+
+      // simple render loop (optional but safe)
+    app.ticker.add(() => {
+      app.render()
+    })
 
     return () => {
       eventBridgeRef.current?.detach()
@@ -106,6 +126,7 @@ const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']>
     canvas.height = CANVAS_HEIGHT
 
     const surface = canvasKit.MakeSWCanvasSurface(canvas)
+    // canvas.style.pointerEvents = 'none'
 
     if (!surface) {
       addLog('Skia surface was not created')
@@ -145,6 +166,7 @@ const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']>
 
 
 
+
   /**
    * 5. Подключаем EventBridge к Skia canvas
    */
@@ -160,9 +182,11 @@ const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']>
       scene: currentScene,
       onPointerDown: (hit) => {
         addLog(`Skia pointerdown: ${hit.object.constructor.name}`)
+    
       },
       onPointerUp: (hit) => {
         addLog(`Skia pointerup: ${hit.object.constructor.name}`)
+     
       },
     })
 
@@ -176,7 +200,7 @@ const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']>
         eventBridgeRef.current = null
       }
     }
-  }, [currentScene, addLog])
+  }, [currentScene, addLog, ])
 
   /**
    * 6. Рендерим сцену через Skia
@@ -210,41 +234,6 @@ const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']>
 
 
 
-const exportPdf = () => {
-  if (!canvasKit || !currentScene) return
-
-  const doc =
-    (canvasKit as any).MakePDFDocument?.() ??
-    (canvasKit as any).MakeSkPDFDocument?.()
-
-  if (!doc) {
-    addLog('ERROR: PDF backend unavailable — need custom WASM build')
-    return
-  }
-
-  const pageCanvas = doc.beginPage(CANVAS_WIDTH, CANVAS_HEIGHT)
-
-  // Белый фон
-  const paint = new canvasKit.Paint()
-  paint.setColor(canvasKit.Color4f(1, 1, 1, 1))
-  paint.setStyle(canvasKit.PaintStyle.Fill)
-  pageCanvas.drawRect(canvasKit.XYWHRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT), paint)
-  paint.delete()
-
-  renderPixiContainerToSkia(currentScene, { ck: canvasKit, canvas: pageCanvas })
-  doc.endPage()
-
-  const bytes: Uint8Array = doc.close()
-  const blob = new Blob([bytes], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'pixiakit-export.pdf'
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 3000)
-
-  addLog('PDF exported ✓')
-}
 
   const handleAddRandomObject = () => {
     if (!currentScene) {
@@ -261,7 +250,7 @@ const exportPdf = () => {
     const addedObject = currentScene.children[currentScene.children.length - 1]
 
     if (addedObject) {
-      addedObject.eventMode = 'static'
+      addedObject.eventMode = 'dynamic'
       addedObject.cursor = 'pointer'
     }
 
@@ -271,6 +260,29 @@ const exportPdf = () => {
 
     addLog(`Added random ${kind}`)
   }
+
+
+    const handleExportPdf = () => {
+      if (!canvasKit || !currentScene) return
+  
+      const error = exportAndDownloadPDF(
+        {
+          ck: canvasKit,
+          container: currentScene,
+          width: CANVAS_WIDTH,
+          height: CANVAS_HEIGHT,
+        },
+        'pixiakit-scene.pdf',
+      )
+  
+      if (error) {
+        addLog(`ERROR: ${error}`)
+        return
+      }
+  
+      addLog('PDF exported ✓')
+    }
+  
 
   return (
     <main className="main-content">
@@ -285,7 +297,8 @@ const exportPdf = () => {
         </ul>
       </section>
 
-      <section className='grid grid-cols-2 gap-8'><section>
+      <section className='grid grid-cols-2 gap-8'>
+        <section className='relative z-50'>
         <h2>PixiJS Scene</h2>
         <div ref={pixiRootRef} />
 
@@ -313,7 +326,7 @@ const exportPdf = () => {
 
 
 
-          <button className="button" onClick={exportPdf}>
+          <button className="button" onClick={handleExportPdf}>
             Export PDF
           </button>
 
