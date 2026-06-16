@@ -11,8 +11,8 @@
  *
  * Слой событий для Skia canvas.
  *
- * Pixi сам умеет обрабатывать pointerdown/pointerup на Pixi canvas, 
- * но Skia canvas после отрисовки превращается в обычную картинку. 
+ * Pixi сам умеет обрабатывать pointerdown/pointerup на Pixi canvas,
+ * но Skia canvas после отрисовки превращается в обычную картинку.
  * Поэтому для Skia-канваса нужно вручную определить, какой PIXI.DisplayObject находится под курсором.
  *
  * MVP-подход:
@@ -129,7 +129,7 @@ export class EventBridge {
   private findInteractiveChild(
     container: PIXI.Container,
     x: number,
-    y: number,
+    y: number
   ): EventBridgeHit | null {
     for (let i = container.children.length - 1; i >= 0; i--) {
       const child = container.children[i]
@@ -145,11 +145,11 @@ export class EventBridge {
 
         continue
       }
-        const worldPoint = new PIXI.Point(x, y)
+      const worldPoint = new PIXI.Point(x, y)
 
-        const inv = child.worldTransform.clone().invert()
-        const localPoint = inv.apply(worldPoint, new PIXI.Point())
-    //   const localPoint = child.toLocal(new PIXI.Point(x, y), undefined, undefined, true)
+      const inv = child.worldTransform.clone().invert()
+      const localPoint = inv.apply(worldPoint, new PIXI.Point())
+      //   const localPoint = child.toLocal(new PIXI.Point(x, y), undefined, undefined, true)
       const hit = this.containsDisplayObject(child, localPoint.x, localPoint.y)
 
       if (hit) {
@@ -167,7 +167,7 @@ export class EventBridge {
   private findInteractiveObject(
     object: PIXI.DisplayObject,
     x: number,
-    y: number,
+    y: number
   ): EventBridgeHit | null {
     if (!this.isInteractive(object)) {
       return null
@@ -193,7 +193,7 @@ export class EventBridge {
   private containsDisplayObject(
     object: PIXI.DisplayObject,
     localX: number,
-    localY: number,
+    localY: number
   ): boolean {
     if (object instanceof PIXI.Graphics) {
       return object.containsPoint(new PIXI.Point(localX, localY))

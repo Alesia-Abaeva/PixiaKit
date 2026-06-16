@@ -1,9 +1,18 @@
 import * as PIXI from 'pixi.js-legacy'
 
 const PALETTE = [
-  '#e74c3c', '#3498db', '#2ecc71', '#f1c40f',
-  '#9b59b6', '#1abc9c', '#e67e22', '#ecf0f1',
-  '#ff69b4', '#00bcd4', '#ff5722', '#8bc34a',
+  '#e74c3c',
+  '#3498db',
+  '#2ecc71',
+  '#f1c40f',
+  '#9b59b6',
+  '#1abc9c',
+  '#e67e22',
+  '#ecf0f1',
+  '#ff69b4',
+  '#00bcd4',
+  '#ff5722',
+  '#8bc34a',
 ]
 
 function randomColor(): string {
@@ -31,14 +40,14 @@ function makeDraggable(obj: PIXI.DisplayObject) {
 
   obj.on('globalpointermove', (event: PIXI.FederatedPointerEvent) => {
     if (!dragging || !dragPosition) return
-    
+
     const newPosition = event.global
     const dx = newPosition.x - dragPosition.x
     const dy = newPosition.y - dragPosition.y
-    
+
     obj.position.x += dx
     obj.position.y += dy
-    
+
     dragPosition = newPosition.clone()
   })
 
@@ -72,7 +81,6 @@ export function addRandomGraphics(container: PIXI.Container): void {
   // graphics.hitArea = graphics.getBounds()
   // graphics.buttonMode = true
 
-
   const fill = randomColor()
   const alpha = 0.75 + Math.random() * 0.25
 
@@ -90,13 +98,13 @@ export function addRandomGraphics(container: PIXI.Container): void {
 
   graphics.endFill()
 
- graphics.position.set(rand(0, container.width - 100), rand(0, container.height - 100))
+  graphics.position.set(rand(0, container.width - 100), rand(0, container.height - 100))
   graphics.angle = Math.random() * 360
   graphics.scale.set(0.75 + Math.random() * 1.5)
 
-    // Обновляем hitArea после установки всех свойств
+  // Обновляем hitArea после установки всех свойств
   updateHitArea(graphics)
-  
+
   container.addChild(graphics)
   makeDraggable(graphics)
 }
@@ -106,7 +114,7 @@ export function addRandomLine(container: PIXI.Container): void {
 
   const color = randomColor()
   const thickness = 2 + Math.random() * 12
-    const endX = 80 + Math.random() * 180
+  const endX = 80 + Math.random() * 180
   const endY = (Math.random() - 0.5) * 160
 
   line.lineStyle(thickness, color, 0.9)
@@ -118,13 +126,8 @@ export function addRandomLine(container: PIXI.Container): void {
 
   // Для линии создаем hitArea на основе bounding box
   const bounds = line.getBounds()
-  line.hitArea = new PIXI.Rectangle(
-    -10,
-    -10,
-    Math.abs(endX) + 20,
-    Math.abs(endY) + 20
-  )
-  
+  line.hitArea = new PIXI.Rectangle(-10, -10, Math.abs(endX) + 20, Math.abs(endY) + 20)
+
   container.addChild(line)
   makeDraggable(line)
 }

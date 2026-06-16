@@ -1,23 +1,13 @@
 import * as PIXI from 'pixi.js-legacy'
-import type {
-    CanvasKit,
-  DrawCall,
-  SkCanvas,
-  SkiaRendererOptions,
-} from '../types/types'
 
+import type { CanvasKit, DrawCall, SkCanvas, SkiaRendererOptions } from '../types/types'
 
 /**
  * Конвертирует цвет Pixi в CanvasKit Color4f.
  */
 function parseColor(ck: CanvasKit, raw: number | string, alpha = 1): Float32Array {
   if (typeof raw === 'number') {
-    return ck.Color4f(
-      ((raw >> 16) & 255) / 255,
-      ((raw >> 8) & 255) / 255,
-      (raw & 255) / 255,
-      alpha,
-    )
+    return ck.Color4f(((raw >> 16) & 255) / 255, ((raw >> 8) & 255) / 255, (raw & 255) / 255, alpha)
   }
 
   const value = raw.trim()
@@ -27,15 +17,19 @@ function parseColor(ck: CanvasKit, raw: number | string, alpha = 1): Float32Arra
   }
 
   const hex = value.slice(1)
-  const normalizedHex = hex.length === 3
-    ? hex.split('').map((char) => char + char).join('')
-    : hex.padEnd(6, '0').slice(0, 6)
+  const normalizedHex =
+    hex.length === 3
+      ? hex
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : hex.padEnd(6, '0').slice(0, 6)
 
   return ck.Color4f(
     parseInt(normalizedHex.slice(0, 2), 16) / 255,
     parseInt(normalizedHex.slice(2, 4), 16) / 255,
     parseInt(normalizedHex.slice(4, 6), 16) / 255,
-    alpha,
+    alpha
   )
 }
 
@@ -45,13 +39,8 @@ function parseColor(ck: CanvasKit, raw: number | string, alpha = 1): Float32Arra
 function applyTransform(canvas: SkCanvas, obj: PIXI.DisplayObject): void {
   const matrix = obj.worldTransform
 
-  canvas.concat([
-    matrix.a, matrix.c, matrix.tx,
-    matrix.b, matrix.d, matrix.ty,
-    0, 0, 1,
-  ])
+  canvas.concat([matrix.a, matrix.c, matrix.tx, matrix.b, matrix.d, matrix.ty, 0, 0, 1])
 }
-
 
 /**
  * Извлекает понятные draw calls из PIXI.Graphics.
@@ -70,10 +59,7 @@ function extractDrawCalls(graphics: PIXI.Graphics): DrawCall[] {
       continue
     }
 
-    const pushFill = (
-      shapeDescriptor: DrawCall['shape'],
-      fill: typeof fillStyle,
-    ): void => {
+    const pushFill = (shapeDescriptor: DrawCall['shape'], fill: typeof fillStyle): void => {
       if (!fill.visible) {
         return
       }
@@ -86,10 +72,7 @@ function extractDrawCalls(graphics: PIXI.Graphics): DrawCall[] {
       })
     }
 
-    const pushStroke = (
-      shapeDescriptor: DrawCall['shape'],
-      stroke: typeof lineStyle,
-    ): void => {
+    const pushStroke = (shapeDescriptor: DrawCall['shape'], stroke: typeof lineStyle): void => {
       if (!stroke.visible || stroke.width <= 0) {
         return
       }
@@ -204,13 +187,8 @@ function renderDrawCall(ck: CanvasKit, canvas: SkCanvas, call: DrawCall): void {
 
   if (call.shape.kind === 'rect') {
     canvas.drawRect(
-      ck.XYWHRect(
-        call.shape.x,
-        call.shape.y,
-        call.shape.width,
-        call.shape.height,
-      ),
-      paint,
+      ck.XYWHRect(call.shape.x, call.shape.y, call.shape.width, call.shape.height),
+      paint
     )
   }
 
@@ -220,35 +198,34 @@ function renderDrawCall(ck: CanvasKit, canvas: SkCanvas, call: DrawCall): void {
         call.shape.x - call.shape.rx,
         call.shape.y - call.shape.ry,
         call.shape.rx * 2,
-        call.shape.ry * 2,
+        call.shape.ry * 2
       ),
-      paint,
+      paint
     )
   }
 
- if (call.shape.kind === 'polygon' || call.shape.kind === 'polyline') {
-  const pathBuilder = new ck.PathBuilder()
-  const points = call.shape.points
+  if (call.shape.kind === 'polygon' || call.shape.kind === 'polyline') {
+    const pathBuilder = new ck.PathBuilder()
+    const points = call.shape.points
 
-  pathBuilder.moveTo(points[0], points[1])
+    pathBuilder.moveTo(points[0], points[1])
 
-  for (let index = 2; index < points.length; index += 2) {
-    pathBuilder.lineTo(points[index], points[index + 1])
+    for (let index = 2; index < points.length; index += 2) {
+      pathBuilder.lineTo(points[index], points[index + 1])
+    }
+
+    if (call.shape.kind === 'polygon') {
+      pathBuilder.close()
+    }
+
+    const path = pathBuilder.detachAndDelete()
+
+    canvas.drawPath(path, paint)
+    path.delete()
   }
-
-  if (call.shape.kind === 'polygon') {
-    pathBuilder.close()
-  }
-
-  const path = pathBuilder.detachAndDelete()
-
-  canvas.drawPath(path, paint)
-  path.delete()
-}
 
   paint.delete()
 }
-
 
 /**
  * Рекурсивно рендерит PIXI.DisplayObject.
@@ -258,9 +235,9 @@ function renderNode(ck: CanvasKit, canvas: SkCanvas, node: PIXI.DisplayObject): 
     return
   }
 
-    canvas.save()
+  canvas.save()
 
-    applyTransform(canvas, node)
+  applyTransform(canvas, node)
 
   if (node instanceof PIXI.Graphics) {
     const drawCalls = extractDrawCalls(node)
@@ -279,11 +256,10 @@ function renderNode(ck: CanvasKit, canvas: SkCanvas, node: PIXI.DisplayObject): 
   canvas.restore()
 }
 
-
 /** TODO: успеет ли отрендерить? */
 export function renderPixiContainerToSkia(
   container: PIXI.Container,
-  options: SkiaRendererOptions,
+  options: SkiaRendererOptions
 ): void {
   renderNode(options.ck, options.canvas, container)
 }

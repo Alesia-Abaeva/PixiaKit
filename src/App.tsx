@@ -1,39 +1,37 @@
-import React from 'react'
+import CanvasKitInit from 'canvaskit-wasm'
 import * as PIXI from 'pixi.js-legacy'
+import React from 'react'
+
 import { EventBridge } from './core/EventBridge'
-import type {  CanvasKit } from './types/types'
+import { exportAndDownloadPDF } from './core/SkiaPDFExporter'
 import { renderPixiContainerToSkia } from './core/SkiaRenderer'
 import { addRandomObject } from './pixi/generators'
-import CanvasKitInit from 'canvaskit-wasm'
 import { SCENES } from './pixi/scene'
-import { exportAndDownloadPDF } from './core/SkiaPDFExporter'
+import type { CanvasKit } from './types/types'
+
 const CANVAS_WIDTH = 600
 const CANVAS_HEIGHT = 400
 
-
 export default function App() {
   const pixiRootRef = React.useRef<HTMLDivElement | null>(null)
- const skiaCanvasRef = React.useRef<HTMLCanvasElement | null>(null)
+  const skiaCanvasRef = React.useRef<HTMLCanvasElement | null>(null)
 
-const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']> | null>(null)
+  const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']> | null>(null)
 
   const appRef = React.useRef<PIXI.Application | null>(null)
   const eventBridgeRef = React.useRef<EventBridge | null>(null)
 
   const [canvasKit, setCanvasKit] = React.useState<CanvasKit | null>(null)
   const [currentSceneIndex, setCurrentSceneIndex] = React.useState(0)
-  const [currentScene, setCurrentScene] =React.useState<PIXI.Container | null>(null)
+  const [currentScene, setCurrentScene] = React.useState<PIXI.Container | null>(null)
   const [renderVersion, setRenderVersion] = React.useState(0)
   const [logs, setLogs] = React.useState<string[]>([])
 
-
-    const addLog = React.useCallback((message: string) => {
+  const addLog = React.useCallback((message: string) => {
     setLogs((prevLogs) => [message, ...prevLogs].slice(0, 8))
   }, [])
 
-
-  
-    /**
+  /**
    * 1. Создаём PIXI.Application({ forceCanvas: true })
    */
   React.useEffect(() => {
@@ -52,24 +50,22 @@ const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']>
     })
 
     app.view.addEventListener('pointerdown', () => {
-  console.log('CANVAS POINTER OK')
-})
+      console.log('CANVAS POINTER OK')
+    })
 
-app.view.style.touchAction = 'none'
-app.view.style.userSelect = 'none'
+    app.view.style.touchAction = 'none'
+    app.view.style.userSelect = 'none'
 
-
-app.stage.on('pointerdown', () => {
-  console.log('PIXI STAGE CLICK OK')
-})
+    app.stage.on('pointerdown', () => {
+      console.log('PIXI STAGE CLICK OK')
+    })
 
     appRef.current = app
-     app.stage.eventMode = 'dynamic'
+    app.stage.eventMode = 'dynamic'
 
     pixiRootRef.current.appendChild(app.view as HTMLCanvasElement)
-    
 
-      // simple render loop (optional but safe)
+    // simple render loop (optional but safe)
     app.ticker.add(() => {
       app.render()
     })
@@ -83,8 +79,7 @@ app.stage.on('pointerdown', () => {
     }
   }, [])
 
-
-    /**
+  /**
    * 2. Загружаем CanvasKit
    */
   React.useEffect(() => {
@@ -106,9 +101,7 @@ app.stage.on('pointerdown', () => {
     }
   }, [addLog])
 
-
-
-    /**
+  /**
    * 3. Создаём Skia surface
    */
   React.useEffect(() => {
@@ -164,9 +157,6 @@ app.stage.on('pointerdown', () => {
     addLog(`Scene changed: ${SCENES[currentSceneIndex].label}`)
   }, [currentSceneIndex, addLog])
 
-
-
-
   /**
    * 5. Подключаем EventBridge к Skia canvas
    */
@@ -182,11 +172,9 @@ app.stage.on('pointerdown', () => {
       scene: currentScene,
       onPointerDown: (hit) => {
         addLog(`Skia pointerdown: ${hit.object.constructor.name}`)
-    
       },
       onPointerUp: (hit) => {
         addLog(`Skia pointerup: ${hit.object.constructor.name}`)
-     
       },
     })
 
@@ -200,7 +188,7 @@ app.stage.on('pointerdown', () => {
         eventBridgeRef.current = null
       }
     }
-  }, [currentScene, addLog, ])
+  }, [currentScene, addLog])
 
   /**
    * 6. Рендерим сцену через Skia
@@ -232,9 +220,6 @@ app.stage.on('pointerdown', () => {
     surface.flush()
   }, [canvasKit, currentScene, renderVersion])
 
-
-
-
   const handleAddRandomObject = () => {
     if (!currentScene) {
       return
@@ -261,28 +246,26 @@ app.stage.on('pointerdown', () => {
     addLog(`Added random ${kind}`)
   }
 
+  const handleExportPdf = () => {
+    if (!canvasKit || !currentScene) return
 
-    const handleExportPdf = () => {
-      if (!canvasKit || !currentScene) return
-  
-      const error = exportAndDownloadPDF(
-        {
-          ck: canvasKit,
-          container: currentScene,
-          width: CANVAS_WIDTH,
-          height: CANVAS_HEIGHT,
-        },
-        'pixiakit-scene.pdf',
-      )
-  
-      if (error) {
-        addLog(`ERROR: ${error}`)
-        return
-      }
-  
-      addLog('PDF exported ✓')
+    const error = exportAndDownloadPDF(
+      {
+        ck: canvasKit,
+        container: currentScene,
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+      },
+      'pixiakit-scene.pdf'
+    )
+
+    if (error) {
+      addLog(`ERROR: ${error}`)
+      return
     }
-  
+
+    addLog('PDF exported ✓')
+  }
 
   return (
     <main className="main-content">
@@ -297,38 +280,33 @@ app.stage.on('pointerdown', () => {
         </ul>
       </section>
 
-      <section className='grid grid-cols-2 gap-8'>
-        <section className='relative z-50'>
-        <h2>PixiJS Scene</h2>
-        <div ref={pixiRootRef} />
+      <section className="grid grid-cols-2 gap-8">
+        <section className="relative z-50">
+          <h2>PixiJS Scene</h2>
+          <div ref={pixiRootRef} />
+        </section>
 
+        <section>
+          <h2>Skia output canvas</h2>
+          <div>
+            <canvas
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              ref={skiaCanvasRef}
+              style={{ border: '1px solid #333' }}
+            />
+          </div>
+        </section>
       </section>
 
-       <section>
-        <h2>Skia output canvas</h2>
-        <div >
-          <canvas
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          ref={skiaCanvasRef}
-          style={{ border: '1px solid #333' }}
-        />
-        </div>
+      <div style={{ marginTop: 10 }}>
+        <button className="button" onClick={handleAddRandomObject}>
+          Add random shape
+        </button>
 
-
-      </section>
-      </section>
-
-              <div style={{ marginTop: 10 }}>
-          <button className="button" onClick={handleAddRandomObject}>
-            Add random shape
-          </button>
-
-
-
-          <button className="button" onClick={handleExportPdf}>
-            Export PDF
-          </button>
+        <button className="button" onClick={handleExportPdf}>
+          Export PDF
+        </button>
 
         {SCENES.map((scene, index) => (
           <button
@@ -340,12 +318,10 @@ app.stage.on('pointerdown', () => {
             {scene.label}
           </button>
         ))}
-        </div>
+      </div>
 
-  <section className="App__status">
-        <p>
-          CanvasKit: {canvasKit ? 'loaded' : 'loading...'}
-        </p>
+      <section className="App__status">
+        <p>CanvasKit: {canvasKit ? 'loaded' : 'loading...'}</p>
 
         <ul>
           {logs.map((log, index) => (
@@ -354,6 +330,5 @@ app.stage.on('pointerdown', () => {
         </ul>
       </section>
     </main>
-
   )
 }

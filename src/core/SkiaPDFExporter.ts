@@ -8,6 +8,7 @@
  */
 
 import * as PIXI from 'pixi.js-legacy'
+
 import type { CanvasKit } from '../types/types'
 import { renderPixiContainerToSkia } from './SkiaRenderer'
 
@@ -34,9 +35,7 @@ export interface PDFExportOptions {
   height: number
 }
 
-export type PDFExportResult =
-  | { ok: true; bytes: Uint8Array }
-  | { ok: false; error: string }
+export type PDFExportResult = { ok: true; bytes: Uint8Array } | { ok: false; error: string }
 
 /**
  * Рендерит PIXI.Container в PDF и возвращает байты.
@@ -88,7 +87,11 @@ export function exportContainerToPDF(options: PDFExportOptions): PDFExportResult
     return { ok: true, bytes }
   } catch (err) {
     // Если что-то пошло не так — закрываем документ чтобы не течь памятью
-    try { doc.close() } catch { /* ignore */ }
+    try {
+      doc.close()
+    } catch {
+      /* ignore */
+    }
 
     return {
       ok: false,
@@ -118,7 +121,7 @@ export function downloadPDFBytes(bytes: Uint8Array, filename = 'scene.pdf'): voi
  */
 export function exportAndDownloadPDF(
   options: PDFExportOptions,
-  filename = 'scene.pdf',
+  filename = 'scene.pdf'
 ): string | null {
   const result = exportContainerToPDF(options)
 
