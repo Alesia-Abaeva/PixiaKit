@@ -21,14 +21,53 @@ export default function App() {
   const appRef = React.useRef<PIXI.Application | null>(null)
   const eventBridgeRef = React.useRef<EventBridge | null>(null)
 
+  // Текущая сцена держим в ref, а не только в state — ticker должен
+  // видеть актуальную сцену на каждом тике без переподписки.
+  const currentSceneRef = React.useRef<PIXI.Container | null>(null)
+  const canvasKitRef = React.useRef<CanvasKit | null>(null)
+
+  // Глобальный флаг "сцена изменилась, нужен перерендер в Skia"
+  const needsSkiaRedrawRef = React.useRef(true)
+
   const [canvasKit, setCanvasKit] = React.useState<CanvasKit | null>(null)
   const [currentSceneIndex, setCurrentSceneIndex] = React.useState(0)
+  // currentScene (state) оставляем ТОЛЬКО для UI/EventBridge, которым нужен re-render.
+  // Рендер-цикл Skia больше НЕ зависит от этого state.
   const [currentScene, setCurrentScene] = React.useState<PIXI.Container | null>(null)
-  const [renderVersion, setRenderVersion] = React.useState(0)
   const [logs, setLogs] = React.useState<string[]>([])
 
   const addLog = React.useCallback((message: string) => {
     setLogs((prevLogs) => [message, ...prevLogs].slice(0, 8))
+  }, [])
+
+  React.useEffect(() => {
+    canvasKitRef.current = canvasKit
+    needsSkiaRedrawRef.current = true
+  }, [canvasKit])
+
+  /**
+   * Рисует текущую сцену на Skia surface "как есть" — без какой-либо
+   * зависимости от React state. Вызывается из PIXI ticker каждый кадр,
+   * поэтому drag, который меняет obj.position напрямую, тоже подхватывается.
+   */
+  const drawSceneToSkia = React.useCallback(() => {
+    const ck = canvasKitRef.current
+    const scene = currentSceneRef.current
+    const surface = skiaSurfaceRef.current
+
+    if (!ck || !scene || !surface) {
+      return
+    }
+
+    const skCanvas = surface.getCanvas()
+    skCanvas.clear(ck.TRANSPARENT)
+
+    renderPixiContainerToSkia(scene, {
+      ck,
+      canvas: skCanvas,
+    })
+
+    surface.flush()
   }, [])
 
   /**
@@ -49,15 +88,13 @@ export default function App() {
       autoDensity: true,
     })
 
-    app.view.addEventListener('pointerdown', () => {
-      console.log('CANVAS POINTER OK')
-    })
-
     app.view.style.touchAction = 'none'
     app.view.style.userSelect = 'none'
 
-    app.stage.on('pointerdown', () => {
-      console.log('PIXI STAGE CLICK OK')
+    /** оптимизация перемещения */
+    app.stage.on('mouseup', () => {
+      console.log('mouseup')
+      needsSkiaRedrawRef.current = true
     })
 
     appRef.current = app
@@ -65,19 +102,32 @@ export default function App() {
 
     pixiRootRef.current.appendChild(app.view as HTMLCanvasElement)
 
-    // simple render loop (optional but safe)
-    app.ticker.add(() => {
+    // Главный цикл: каждый кадр —
+    //   1) PIXI рендерит сам себя (нужно для drag/move/transform),
+    //   2) та же сцена перерисовывается на Skia canvas.
+    // Благодаря этому любое изменение позиции/угла/масштаба (включая drag)
+    // мгновенно отражается в Skia без ручных вызовов setRenderVersion.
+
+    const tick = () => {
       app.render()
-    })
+
+      if (!needsSkiaRedrawRef.current) {
+        return
+      }
+      drawSceneToSkia()
+      needsSkiaRedrawRef.current = false
+    }
+    app.ticker.add(tick)
 
     return () => {
+      app.ticker.remove(tick)
       eventBridgeRef.current?.detach()
       eventBridgeRef.current = null
 
       app.destroy(true, { children: true })
       appRef.current = null
     }
-  }, [])
+  }, [drawSceneToSkia])
 
   /**
    * 2. Загружаем CanvasKit
@@ -119,7 +169,6 @@ export default function App() {
     canvas.height = CANVAS_HEIGHT
 
     const surface = canvasKit.MakeSWCanvasSurface(canvas)
-    // canvas.style.pointerEvents = 'none'
 
     if (!surface) {
       addLog('Skia surface was not created')
@@ -150,6 +199,9 @@ export default function App() {
 
     app.stage.addChild(scene)
     app.render()
+
+    currentSceneRef.current = scene
+    needsSkiaRedrawRef.current = true
 
     setCurrentScene(scene)
     eventBridgeRef.current?.setScene(scene)
@@ -190,42 +242,13 @@ export default function App() {
     }
   }, [currentScene, addLog])
 
-  /**
-   * 6. Рендерим сцену через Skia
-   */
-  React.useEffect(() => {
-    if (!canvasKit) {
-      return
-    }
-
-    if (!currentScene) {
-      return
-    }
-
-    const surface = skiaSurfaceRef.current
-
-    if (!surface) {
-      return
-    }
-
-    const skCanvas = surface.getCanvas()
-
-    skCanvas.clear(canvasKit.TRANSPARENT)
-
-    renderPixiContainerToSkia(currentScene, {
-      ck: canvasKit,
-      canvas: skCanvas,
-    })
-
-    surface.flush()
-  }, [canvasKit, currentScene, renderVersion])
-
   const handleAddRandomObject = () => {
     if (!currentScene) {
       return
     }
 
     const kind = addRandomObject(currentScene)
+    needsSkiaRedrawRef.current = true
 
     /**
      * MVP-фикс:
@@ -241,7 +264,7 @@ export default function App() {
 
     appRef.current?.render()
 
-    setRenderVersion((version) => version + 1)
+    // setRenderVersion((version) => version + 1)
 
     addLog(`Added random ${kind}`)
   }

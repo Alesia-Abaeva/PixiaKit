@@ -12,8 +12,6 @@ import * as PIXI from 'pixi.js-legacy'
 import type { CanvasKit } from '../types/types'
 import { renderPixiContainerToSkia } from './SkiaRenderer'
 
-// ─── Типы PDF-документа (не экспортируются из canvaskit-wasm) ────────────────
-
 interface SkPDFDocument {
   /**
    * Открывает новую страницу и возвращает canvas для рисования.
@@ -25,8 +23,6 @@ interface SkPDFDocument {
   /** Завершает документ и возвращает байты PDF-файла. */
   close(): Uint8Array
 }
-
-// ─── Публичный API ────────────────────────────────────────────────────────────
 
 export interface PDFExportOptions {
   ck: CanvasKit
@@ -46,7 +42,7 @@ export type PDFExportResult = { ok: true; bytes: Uint8Array } | { ok: false; err
 export function exportContainerToPDF(options: PDFExportOptions): PDFExportResult {
   const { ck, container, width, height } = options
 
-  // ── 1. Получаем PDF-документ ───────────────────────────────────────────────
+  //  Получаем PDF-документ
   const doc = makePDFDocument(ck)
 
   if (!doc) {
@@ -60,17 +56,17 @@ export function exportContainerToPDF(options: PDFExportOptions): PDFExportResult
   }
 
   try {
-    // ── 2. Открываем страницу ──────────────────────────────────────────────
+    // Открываем страницу
     const pageCanvas = doc.beginPage(width, height)
 
-    // ── 3. Белый фон (PDF по умолчанию прозрачный) ────────────────────────
+    //  Белый фон (PDF по умолчанию прозрачный)
     const bgPaint = new ck.Paint()
     bgPaint.setColor(ck.Color4f(1, 1, 1, 1))
     bgPaint.setStyle(ck.PaintStyle.Fill)
     pageCanvas.drawRect(ck.XYWHRect(0, 0, width, height), bgPaint)
     bgPaint.delete()
 
-    // ── 4. Рендерим сцену ──────────────────────────────────────────────────
+    //  Рендерим сцену
     // pageCanvas имеет тот же интерфейс что и SkCanvas от MakeSWCanvasSurface,
     // поэтому renderPixiContainerToSkia работает без изменений.
     // Все Graphics рисуются как векторные PDF-пути, не как растр.
@@ -81,7 +77,7 @@ export function exportContainerToPDF(options: PDFExportOptions): PDFExportResult
 
     doc.endPage()
 
-    // ── 5. Сериализуем в байты ─────────────────────────────────────────────
+    // Сериализуем в байты
     const bytes = doc.close()
 
     return { ok: true, bytes }
@@ -133,7 +129,7 @@ export function exportAndDownloadPDF(
   return null
 }
 
-// ─── Вспомогательные функции ──────────────────────────────────────────────────
+// Вспомогательные функции
 
 /**
  * Пробует получить PDF-документ из CanvasKit.
