@@ -9,19 +9,15 @@
 
 import * as PIXI from 'pixi.js-legacy'
 
-import type { CanvasKit } from '../types/types'
+import type { CanvasKit, SkCanvas } from '../types/types'
 import { renderPixiContainerToSkia } from './SkiaRenderer'
 
 interface SkPDFDocument {
-  /**
-   * Открывает новую страницу и возвращает canvas для рисования.
-   * Canvas имеет тот же интерфейс что и обычный SkCanvas —
-   * поэтому renderPixiContainerToSkia работает без изменений.
-   */
-  beginPage(width: number, height: number): any
+  /** Открывает новую страницу и возвращает canvas для рисования. */
+  beginPage(width: number, height: number): SkCanvas
   endPage(): void
   /** Завершает документ и возвращает байты PDF-файла. */
-  close(): Uint8Array
+  close(): Uint8Array<ArrayBuffer>
 }
 
 export interface PDFExportOptions {
@@ -31,7 +27,9 @@ export interface PDFExportOptions {
   height: number
 }
 
-export type PDFExportResult = { ok: true; bytes: Uint8Array } | { ok: false; error: string }
+export type PDFExportResult =
+  | { ok: true; bytes: Uint8Array<ArrayBuffer> }
+  | { ok: false; error: string }
 
 /**
  * Рендерит PIXI.Container в PDF и возвращает байты.
@@ -99,7 +97,7 @@ export function exportContainerToPDF(options: PDFExportOptions): PDFExportResult
 /**
  * Скачивает PDF-байты как файл в браузере.
  */
-export function downloadPDFBytes(bytes: Uint8Array, filename = 'scene.pdf'): void {
+export function downloadPDFBytes(bytes: Uint8Array<ArrayBuffer>, filename = 'scene.pdf'): void {
   const blob = new Blob([bytes], { type: 'application/pdf' })
   const url = URL.createObjectURL(blob)
 
@@ -136,14 +134,19 @@ export function exportAndDownloadPDF(
  * Проверяем оба возможных имени метода — они различались в разных версиях Skia.
  */
 function makePDFDocument(ck: CanvasKit): SkPDFDocument | null {
-  const ckAny = ck as any
-
-  if (typeof ckAny.MakePDFDocument === 'function') {
-    return ckAny.MakePDFDocument() as SkPDFDocument
+  type CanvasKitWithPDF = CanvasKit & {
+    MakePDFDocument?: () => SkPDFDocument
+    MakeSkPDFDocument?: () => SkPDFDocument
   }
 
-  if (typeof ckAny.MakeSkPDFDocument === 'function') {
-    return ckAny.MakeSkPDFDocument() as SkPDFDocument
+  const ckWithPDF = ck as CanvasKitWithPDF
+
+  if (typeof ckWithPDF.MakePDFDocument === 'function') {
+    return ckWithPDF.MakePDFDocument()
+  }
+
+  if (typeof ckWithPDF.MakeSkPDFDocument === 'function') {
+    return ckWithPDF.MakeSkPDFDocument()
   }
 
   return null

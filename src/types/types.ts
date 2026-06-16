@@ -10,6 +10,13 @@ export interface SkiaRendererOptions {
   canvas: SkCanvas
 }
 
+export interface SkPath {
+  moveTo(x: number, y: number): SkPath
+  lineTo(x: number, y: number): SkPath
+  close(): SkPath
+  delete(): void
+}
+
 export interface SkPathBuilderLike {
   moveTo(x: number, y: number): SkPathBuilderLike
   lineTo(x: number, y: number): SkPathBuilderLike

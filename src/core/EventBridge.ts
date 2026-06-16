@@ -1,24 +1,9 @@
 /**
- * клик по Skia canvas
- * ↓
- * найти объект под мышкой
- * ↓
- * вызвать pointerdown / pointerup
- */
-
-/**
- * EventBridge.ts
- *
  * Слой событий для Skia canvas.
  *
  * Pixi сам умеет обрабатывать pointerdown/pointerup на Pixi canvas,
  * но Skia canvas после отрисовки превращается в обычную картинку.
  * Поэтому для Skia-канваса нужно вручную определить, какой PIXI.DisplayObject находится под курсором.
- *
- * MVP-подход:
- * - используем getBounds() для поиска объекта под точкой клика;
- * - игнорируем Container как цель, если внутри есть вложенные объекты;
- * - для Graphics используем containsPoint(), если getBounds() дал попадание.
  */
 
 import * as PIXI from 'pixi.js-legacy'
@@ -201,12 +186,5 @@ export class EventBridge {
 
     const bounds = object.getLocalBounds()
     return bounds.contains(localX, localY)
-
-    return (
-      localX >= bounds.x &&
-      localX <= bounds.x + bounds.width &&
-      localY >= bounds.y &&
-      localY <= bounds.y + bounds.height
-    )
   }
 }

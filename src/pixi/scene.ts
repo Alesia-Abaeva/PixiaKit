@@ -14,6 +14,22 @@ import * as PIXI from 'pixi.js-legacy'
 
 import { makeDraggable } from './generators'
 
+function setLineHitArea(
+  line: PIXI.Graphics,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  padding = 15
+): void {
+  const minX = Math.min(x1, x2) - padding
+  const minY = Math.min(y1, y2) - padding
+  const width = Math.abs(x2 - x1) + padding * 2
+  const height = Math.abs(y2 - y1) + padding * 2
+
+  line.hitArea = new PIXI.Rectangle(minX, minY, width, height)
+}
+
 /**
  * Сцена 1 — пример из задания.
  */
@@ -40,11 +56,13 @@ export function createScene1(): PIXI.Container {
   makeDraggable(g2)
 
   g3.lineStyle(10, '#ffffff', 1).moveTo(0, 0).lineTo(150, 100)
+  setLineHitArea(g3, 0, 0, 150, 100)
   g3.position.set(200, 100)
   g3.angle = -20
   makeDraggable(g3)
 
   g4.lineStyle(10, '#ffff00', 1).moveTo(0, 70).lineTo(150, -30)
+  setLineHitArea(g4, 0, 70, 150, -30)
 
   g4.angle = 20
   makeDraggable(g4)
@@ -86,7 +104,9 @@ export function createScene2(): PIXI.Container {
   makeDraggable(cross)
 
   const line = new PIXI.Graphics()
+
   line.lineStyle(6, '#e91e63', 1).moveTo(0, 0).lineTo(200, 150)
+  setLineHitArea(line, 0, 0, 200, 150)
   line.position.set(50, 220)
   makeDraggable(line)
 

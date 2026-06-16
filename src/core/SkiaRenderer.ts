@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js-legacy'
 
-import type { CanvasKit, DrawCall, SkCanvas, SkiaRendererOptions } from '../types/types'
+import type { CanvasKit, DrawCall, SkCanvas, SkiaRendererOptions, SkPath } from '../types/types'
 
 /**
  * Конвертирует цвет Pixi в CanvasKit Color4f.
@@ -37,7 +37,7 @@ function parseColor(ck: CanvasKit, raw: number | string, alpha = 1): Float32Arra
  * Применяет мировую матрицу Pixi-объекта к Skia canvas.
  */
 function applyTransform(canvas: SkCanvas, obj: PIXI.DisplayObject): void {
-  const matrix = obj.worldTransform
+  const matrix = obj.localTransform
 
   canvas.concat([matrix.a, matrix.c, matrix.tx, matrix.b, matrix.d, matrix.ty, 0, 0, 1])
 }
@@ -205,22 +205,20 @@ function renderDrawCall(ck: CanvasKit, canvas: SkCanvas, call: DrawCall): void {
   }
 
   if (call.shape.kind === 'polygon' || call.shape.kind === 'polyline') {
-    const pathBuilder = new ck.PathBuilder()
+    const path = new ck.Path() as unknown as SkPath
     const points = call.shape.points
 
-    pathBuilder.moveTo(points[0], points[1])
+    path.moveTo(points[0], points[1])
 
     for (let index = 2; index < points.length; index += 2) {
-      pathBuilder.lineTo(points[index], points[index + 1])
+      path.lineTo(points[index], points[index + 1])
     }
 
     if (call.shape.kind === 'polygon') {
-      pathBuilder.close()
+      path.close()
     }
 
-    const path = pathBuilder.detachAndDelete()
-
-    canvas.drawPath(path, paint)
+    canvas.drawPath(path as unknown as Parameters<typeof canvas.drawPath>[0], paint)
     path.delete()
   }
 

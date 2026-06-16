@@ -51,7 +51,7 @@
 }
 
 #root {
-  width: 1200px;
+  width: 1300px;
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
@@ -72,6 +72,6 @@ p {
 
 @layer utilities {
   .button {
-    @apply h-9 px-4 py-2 cursor-pointer hover:bg-gray-600  bg-gray-800 relative z-5 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none  [&_svg]:shrink-0 outline-none   focus-visible:ring-[3px];
+    @apply h-9 px-4 py-2 cursor-pointer hover:bg-neutral-600  bg-neutral-800 relative z-5 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm text-base font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none  [&_svg]:shrink-0 outline-none   focus-visible:ring-[3px];
   }
 }

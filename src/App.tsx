@@ -2,6 +2,8 @@ import CanvasKitInit from 'canvaskit-wasm'
 import * as PIXI from 'pixi.js-legacy'
 import React from 'react'
 
+import { loadCanvasKit } from './core/CanvasKitLoader'
+// import { loadCanvasKit } from './core/CanvasKitLoader'
 import { EventBridge } from './core/EventBridge'
 import { exportAndDownloadPDF } from './core/SkiaPDFExporter'
 import { renderPixiContainerToSkia } from './core/SkiaRenderer'
@@ -58,14 +60,18 @@ export default function App() {
     if (!ck || !scene || !surface) {
       return
     }
+    try {
+      const skCanvas = surface.getCanvas()
+      skCanvas.clear(ck.TRANSPARENT)
 
-    const skCanvas = surface.getCanvas()
-    skCanvas.clear(ck.TRANSPARENT)
+      renderPixiContainerToSkia(scene, { ck, canvas: skCanvas })
 
-    renderPixiContainerToSkia(scene, {
-      ck,
-      canvas: skCanvas,
-    })
+      surface.flush()
+    } catch (err) {
+      // PIXI ticker сам проглатывает необработанные исключения внутри tick(),
+      // поэтому без явного catch ошибка рендера в Skia была бы совсем не видна.
+      console.error('[drawSceneToSkia] render failed:', err)
+    }
 
     surface.flush()
   }, [])
@@ -135,17 +141,27 @@ export default function App() {
   React.useEffect(() => {
     let disposed = false
 
-    CanvasKitInit({
-      locateFile: (file) => {
-        return `https://unpkg.com/canvaskit-wasm@0.41.1/bin/${file}`
-      },
-    }).then((loadedCanvasKit) => {
+    loadCanvasKit().then(({ ck, hasPDF }) => {
+      console.log('CanvasKit loaded, PDF support:', hasPDF)
+
       if (!disposed) {
-        setCanvasKit(loadedCanvasKit)
-        addLog('CanvasKit loaded')
+        setCanvasKit(ck)
+        addLog(
+          hasPDF ? 'CanvasKit loaded with PDF support' : 'CanvasKit loaded without PDF support'
+        )
       }
     })
 
+    // CanvasKitInit({
+    //   locateFile: (file) => {
+    //     return `/canvaskit/${file}`
+    //   },
+    // }).then((loadedCanvasKit) => {
+    //   if (!disposed) {
+    //     setCanvasKit(loadedCanvasKit)
+    //     addLog('CanvasKit loaded')
+    //   }
+    // })
     return () => {
       disposed = true
     }
@@ -258,8 +274,16 @@ export default function App() {
     const addedObject = currentScene.children[currentScene.children.length - 1]
 
     if (addedObject) {
-      addedObject.eventMode = 'dynamic'
-      addedObject.cursor = 'pointer'
+      const scene = currentSceneRef.current
+
+      if (scene) {
+        const lastSceneObject = scene.children[scene.children.length - 1]
+
+        if (lastSceneObject) {
+          lastSceneObject.eventMode = 'dynamic'
+          lastSceneObject.cursor = 'pointer'
+        }
+      }
     }
 
     appRef.current?.render()
@@ -291,26 +315,18 @@ export default function App() {
   }
 
   return (
-    <main className="main-content">
-      <h1 className="text-3xl font-bold">PixiJS to Skia Renderer</h1>
-      <p>Welcome to the PixiJS to Skia Renderer!</p>
-
-      <section>
-        <h2>Features</h2>
-        <ul>
-          <li>Render PixiJS scenes to Skia canvas</li>
-          <li>Export rendered content as PDF</li>
-        </ul>
-      </section>
+    <main className="py-15 px-5">
+      <h1 className="text-3xl font-bold pb-2">PixiJS to Skia Renderer</h1>
+      <p className="pb-15">Welcome to the PixiJS to Skia Renderer!</p>
 
       <section className="grid grid-cols-2 gap-8">
-        <section className="relative z-50">
-          <h2>PixiJS Scene</h2>
+        <section className="relative z-50 ">
+          <h2 className="text-xl font-semibold pb-5">PixiJS Scene</h2>
           <div ref={pixiRootRef} />
         </section>
 
         <section>
-          <h2>Skia output canvas</h2>
+          <h2 className="text-xl font-semibold pb-5">Skia output canvas</h2>
           <div>
             <canvas
               width={CANVAS_WIDTH}
@@ -322,7 +338,7 @@ export default function App() {
         </section>
       </section>
 
-      <div style={{ marginTop: 10 }}>
+      <div className="pt-15 flex gap-2 flex-cols m-auto">
         <button className="button" onClick={handleAddRandomObject}>
           Add random shape
         </button>
@@ -343,8 +359,8 @@ export default function App() {
         ))}
       </div>
 
-      <section className="App__status">
-        <p>CanvasKit: {canvasKit ? 'loaded' : 'loading...'}</p>
+      <section className="bg-neutral-900 text-neutral-300 p-4 mt-15 rounded-md">
+        <p className="text-xl pb-1">CanvasKit: {canvasKit ? 'loaded' : 'loading...'}</p>
 
         <ul>
           {logs.map((log, index) => (
