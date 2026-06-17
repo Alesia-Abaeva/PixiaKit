@@ -10,7 +10,7 @@ import prettierPlugin from 'eslint-plugin-prettier'
 import simpleImportSort from 'eslint-plugin-simple-import-sort'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'wasm-build/out', 'wasm-build/canvaskit.patch']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

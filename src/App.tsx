@@ -2,12 +2,17 @@ import type { CanvasKit } from '@warmBuild'
 import * as PIXI from 'pixi.js-legacy'
 import React from 'react'
 
-import { loadCanvasKit } from './core/CanvasKitLoader'
-import { EventBridge } from './core/EventBridge'
-import { exportAndDownloadPDF } from './core/SkiaPDFExporter'
-import { renderPixiContainerToSkia } from './core/SkiaRenderer'
-import { addRandomObject } from './pixi/generators'
-import { SCENES } from './pixi/scene'
+import type { EventBridge } from './core'
+import { exportAndDownloadPDF } from './core'
+import {
+  useCanvasKit,
+  useEventBridge,
+  useLogger,
+  usePixiSkiaRenderLoop,
+  useSceneSwitcher,
+  useSkiaSurface,
+} from './hooks'
+import { addRandomObject, SCENES } from './pixi'
 
 const CANVAS_WIDTH = 600
 const CANVAS_HEIGHT = 400
@@ -16,285 +21,71 @@ export default function App() {
   const pixiRootRef = React.useRef<HTMLDivElement | null>(null)
   const skiaCanvasRef = React.useRef<HTMLCanvasElement | null>(null)
 
-  const skiaSurfaceRef = React.useRef<ReturnType<CanvasKit['MakeSWCanvasSurface']> | null>(null)
-
   const appRef = React.useRef<PIXI.Application | null>(null)
-  const eventBridgeRef = React.useRef<EventBridge | null>(null)
-
-  // Текущая сцена держим в ref, а не только в state — ticker должен
-  // видеть актуальную сцену на каждом тике без переподписки.
   const currentSceneRef = React.useRef<PIXI.Container | null>(null)
+  const eventBridgeRef = React.useRef<EventBridge | null>(null)
+  const needsSkiaRedrawRef = React.useRef(true)
   const canvasKitRef = React.useRef<CanvasKit | null>(null)
 
-  // Глобальный флаг "сцена изменилась, нужен перерендер в Skia"
-  const needsSkiaRedrawRef = React.useRef(true)
-
-  const [canvasKit, setCanvasKit] = React.useState<CanvasKit | null>(null)
-  const [currentSceneIndex, setCurrentSceneIndex] = React.useState(0)
-  // currentScene (state) оставляем ТОЛЬКО для UI/EventBridge, которым нужен re-render.
-  // Рендер-цикл Skia больше НЕ зависит от этого state.
-  const [currentScene, setCurrentScene] = React.useState<PIXI.Container | null>(null)
-  const [logs, setLogs] = React.useState<string[]>([])
-
-  const addLog = React.useCallback((message: string) => {
-    setLogs((prevLogs) => [message, ...prevLogs].slice(0, 8))
-  }, [])
+  const { logs, addLog } = useLogger()
+  const canvasKit = useCanvasKit(addLog)
 
   React.useEffect(() => {
     canvasKitRef.current = canvasKit
     needsSkiaRedrawRef.current = true
   }, [canvasKit])
 
-  /**
-   * Рисует текущую сцену на Skia surface "как есть" — без какой-либо
-   * зависимости от React state. Вызывается из PIXI ticker каждый кадр,
-   * поэтому drag, который меняет obj.position напрямую, тоже подхватывается.
-   */
-  const drawSceneToSkia = React.useCallback(() => {
-    const ck = canvasKitRef.current
-    const scene = currentSceneRef.current
-    const surface = skiaSurfaceRef.current
+  const skiaSurfaceRef = useSkiaSurface(
+    canvasKit,
+    skiaCanvasRef,
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+    addLog
+  )
 
-    if (!ck || !scene || !surface) {
-      return
-    }
-    try {
-      const skCanvas = surface.getCanvas()
-      skCanvas.clear(ck.TRANSPARENT)
+  usePixiSkiaRenderLoop({
+    pixiRootRef,
+    appRef,
+    canvasKitRef,
+    currentSceneRef,
+    skiaSurfaceRef,
+    eventBridgeRef,
+    needsSkiaRedrawRef,
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
+  })
 
-      renderPixiContainerToSkia(scene, { ck, canvas: skCanvas })
+  const { currentScene, setCurrentSceneIndex } = useSceneSwitcher({
+    appRef,
+    currentSceneRef,
+    eventBridgeRef,
+    needsSkiaRedrawRef,
+    addLog,
+  })
 
-      surface.flush()
-    } catch (err) {
-      // PIXI ticker сам проглатывает необработанные исключения внутри tick(),
-      // поэтому без явного catch ошибка рендера в Skia была бы совсем не видна.
-      console.error('[drawSceneToSkia] render failed:', err)
-    }
-
-    surface.flush()
-  }, [])
-
-  /**
-   * 1. Создаём PIXI.Application({ forceCanvas: true })
-   */
-  React.useEffect(() => {
-    if (!pixiRootRef.current) {
-      return
-    }
-
-    const app = new PIXI.Application<HTMLCanvasElement>({
-      width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
-      forceCanvas: true,
-      backgroundColor: 0x1f2028,
-      antialias: true,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
-    })
-
-    app.view.style.touchAction = 'none'
-    app.view.style.userSelect = 'none'
-
-    /** оптимизация перемещения */
-    app.stage.on('mouseup', () => {
-      console.log('mouseup')
-      needsSkiaRedrawRef.current = true
-    })
-
-    appRef.current = app
-    app.stage.eventMode = 'dynamic'
-
-    pixiRootRef.current.appendChild(app.view as HTMLCanvasElement)
-
-    // Главный цикл: каждый кадр —
-    //   1) PIXI рендерит сам себя (нужно для drag/move/transform),
-    //   2) та же сцена перерисовывается на Skia canvas.
-    // Благодаря этому любое изменение позиции/угла/масштаба (включая drag)
-    // мгновенно отражается в Skia без ручных вызовов setRenderVersion.
-
-    const tick = () => {
-      app.render()
-
-      if (!needsSkiaRedrawRef.current) {
-        return
-      }
-      drawSceneToSkia()
-      needsSkiaRedrawRef.current = false
-    }
-    app.ticker.add(tick)
-
-    return () => {
-      app.ticker.remove(tick)
-      eventBridgeRef.current?.detach()
-      eventBridgeRef.current = null
-
-      app.destroy(true, { children: true })
-      appRef.current = null
-    }
-  }, [drawSceneToSkia])
-
-  /**
-   * 2. Загружаем CanvasKit
-   */
-  React.useEffect(() => {
-    let disposed = false
-
-    ;(async () => {
-      try {
-        const instance = await loadCanvasKit()
-
-        if (disposed) return
-
-        console.log('CanvasKit loaded, PDF support:', instance.MakePDFDocument ? 'yes' : 'no')
-        setCanvasKit(instance)
-        addLog(
-          instance.MakePDFDocument
-            ? 'CanvasKit loaded with PDF support'
-            : 'CanvasKit loaded without PDF support'
-        )
-      } catch (error) {
-        if (disposed) return
-
-        console.error('Failed to load CanvasKit:', error)
-        addLog(
-          'Failed to load CanvasKit: ' + (error instanceof Error ? error.message : String(error))
-        )
-      }
-    })()
-
-    return () => {
-      disposed = true
-    }
-  }, [])
-
-  /**
-   * 3. Создаём Skia surface
-   */
-  React.useEffect(() => {
-    if (!canvasKit) {
-      return
-    }
-
-    const canvas = skiaCanvasRef.current
-
-    if (!canvas) {
-      return
-    }
-
-    canvas.width = CANVAS_WIDTH
-    canvas.height = CANVAS_HEIGHT
-
-    const surface = canvasKit.MakeSWCanvasSurface(canvas)
-
-    if (!surface) {
-      addLog('Skia surface was not created')
-      return
-    }
-
-    skiaSurfaceRef.current = surface
-
-    return () => {
-      surface.dispose()
-      skiaSurfaceRef.current = null
-    }
-  }, [canvasKit, addLog])
-
-  /**
-   * 4. Держим текущую сцену и переключаем сцены
-   */
-  React.useEffect(() => {
-    const app = appRef.current
-
-    if (!app) {
-      return
-    }
-
-    app.stage.removeChildren()
-
-    const scene = SCENES[currentSceneIndex].factory()
-
-    app.stage.addChild(scene)
-    app.render()
-
-    currentSceneRef.current = scene
-    needsSkiaRedrawRef.current = true
-
-    setCurrentScene(scene)
-    eventBridgeRef.current?.setScene(scene)
-
-    addLog(`Scene changed: ${SCENES[currentSceneIndex].label}`)
-  }, [currentSceneIndex, addLog])
-
-  /**
-   * 5. Подключаем EventBridge к Skia canvas
-   */
-  React.useEffect(() => {
-    const canvas = skiaCanvasRef.current
-
-    if (!canvas || !currentScene) {
-      return
-    }
-
-    const eventBridge = new EventBridge({
-      canvas,
-      scene: currentScene,
-      onPointerDown: (hit) => {
-        addLog(`Skia pointerdown: ${hit.object.constructor.name}`)
-      },
-      onPointerUp: (hit) => {
-        addLog(`Skia pointerup: ${hit.object.constructor.name}`)
-      },
-    })
-
-    eventBridge.attach()
-    eventBridgeRef.current = eventBridge
-
-    return () => {
-      eventBridge.detach()
-
-      if (eventBridgeRef.current === eventBridge) {
-        eventBridgeRef.current = null
-      }
-    }
-  }, [currentScene, addLog])
+  /** EventBridge для Skia canvas  */
+  useEventBridge(skiaCanvasRef, eventBridgeRef, currentScene, addLog)
 
   const handleAddRandomObject = () => {
-    if (!currentScene) {
-      return
-    }
+    const scene = currentSceneRef.current
+    if (!scene) return
 
-    const kind = addRandomObject(currentScene)
+    const kind = addRandomObject(scene)
     needsSkiaRedrawRef.current = true
 
-    /**
-     * MVP-фикс:
-     * делаем добавленный объект интерактивным,
-     * чтобы EventBridge мог его найти.
-     */
-    const addedObject = currentScene.children[currentScene.children.length - 1]
-
+    const addedObject = scene.children[scene.children.length - 1]
     if (addedObject) {
-      const scene = currentSceneRef.current
-
-      if (scene) {
-        const lastSceneObject = scene.children[scene.children.length - 1]
-
-        if (lastSceneObject) {
-          lastSceneObject.eventMode = 'dynamic'
-          lastSceneObject.cursor = 'pointer'
-        }
-      }
+      addedObject.eventMode = 'dynamic'
+      addedObject.cursor = 'pointer'
     }
 
     appRef.current?.render()
-
-    // setRenderVersion((version) => version + 1)
-
     addLog(`Added random ${kind}`)
   }
 
   const handleExportPdf = async () => {
     if (!canvasKit || !currentScene) return
+
     const error = await exportAndDownloadPDF(
       {
         ck: canvasKit,
@@ -319,7 +110,7 @@ export default function App() {
       <p className="pb-15">Welcome to the PixiJS to Skia Renderer!</p>
 
       <section className="grid grid-cols-2 gap-8">
-        <section className="relative z-50 ">
+        <section className="relative z-50">
           <h2 className="text-xl font-semibold pb-5">PixiJS Scene</h2>
           <div ref={pixiRootRef} />
         </section>

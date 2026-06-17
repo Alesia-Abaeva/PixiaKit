@@ -13,9 +13,9 @@ interface PDFExportOptions {
 export async function exportAndDownloadPDF(
   options: PDFExportOptions,
   filename = 'scene.pdf'
-): Promise<void> {
+): Promise<string | null> {
   if (!('MakePDFDocument' in options.ck)) {
-    throw new Error('PDF backend not available')
+    return 'PDF backend not available. Нужна кастомная WASM-сборка с PDF backend.'
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,9 +24,10 @@ export async function exportAndDownloadPDF(
   options.container.updateTransform()
 
   const doc = ckPdf.MakePDFDocument(options.width, options.height)
-  if (!doc) throw new Error('Failed to create PDF document')
 
   try {
+    if (!doc) throw new Error('Failed to create PDF document')
+
     const canvas = ckPdf._pdf_beginPage(doc._docPtr, doc._width, doc._height)
 
     if (!canvas) throw new Error('Failed to begin PDF page')
@@ -66,9 +67,10 @@ export async function exportAndDownloadPDF(
     a.remove()
 
     setTimeout(() => URL.revokeObjectURL(url), 5000)
-  } catch (e) {
+    return null
+  } catch (err) {
     ckPdf._pdf_close(doc._docPtr)
 
-    throw e
+    throw err instanceof Error ? err.message : String(err)
   }
 }
