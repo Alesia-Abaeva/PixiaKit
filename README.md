@@ -1,263 +1,328 @@
-# Тестовое задание: Pixi.js + Skia + PDF Export
+# PixiaKit
 
-## Описание
+PixiaKit — React + TypeScript приложение, которое рендерит сцены **Pixi.js** одновременно в стандартный Pixi canvas и в **Skia CanvasKit**, а также экспортирует текущую сцену в **PDF** через кастомный CanvasKit WASM с PDF backend.
 
-Необходимо разработать приложение на **TypeScript**, которое объединяет возможности **Pixi.js** и **Skia (CanvasKit)**, реализует собственную обёртку для рендеринга `PIXI.Container` средствами Skia и позволяет экспортировать результат в **PDF** с использованием **Skia PDF backend**.
+Проект демонстрирует:
 
----
-
-## Цели проекта
-
-* Реализовать собственный рендерер Pixi-сцены через Skia.
-* Поддержать экспорт сцены в векторный PDF.
-* Обеспечить работу интерактивных событий на обоих канвасах.
-* Предоставить простой пользовательский интерфейс для тестирования функциональности.
+- собственный рендерер `PIXI.Container` средствами Skia;
+- сохранение трансформаций через иерархию контейнеров;
+- векторную отрисовку `PIXI.Graphics` в Skia/PDF;
+- экспорт PDF без рендера всей сцены в один растр;
+- интерактивность на Pixi canvas и отдельный hit-test для Skia canvas;
+- модульную архитектуру через React hooks.
 
 ---
 
-# Функциональные требования
+## Возможности
 
-## 1. Обёртка для Skia
+### Реализовано
 
-Необходимо реализовать TypeScript-обёртку, которая принимает объект типа:
+- `PIXI.Application` с `forceCanvas: true`.
+- Рендеринг Pixi-сцены в отдельный Skia canvas через CanvasKit.
+- Поддержка `PIXI.Graphics`:
+  - прямоугольники;
+  - эллипсы;
+  - линии;
+  - полигоны;
+  - `moveTo` / `lineTo`.
+- Переключение между несколькими готовыми сценами.
+- Добавление случайных фигур и линий.
+- Drag-and-drop объектов на Pixi canvas.
+- Hit-test на Skia canvas через `EventBridge`.
+- Экспорт в PDF через `Skia PDF backend`.
+- Кастомная сборка CanvasKit WASM в `wasm-build/`.
 
-```ts
-PIXI.Container
-```
+### Ограничения
 
-и выполняет его отрисовку средствами Skia.
-
-### Поддерживаемые объекты
-
-Минимально необходимо поддержать следующие типы объектов:
-
-### `PIXI.Graphics`
-
-Поддержка операций:
-
-* `drawShape`
-* `moveTo`
-* `lineTo`
-* `drawRect`
-
-### `PIXI.Sprite`
-
-Поддержка отображения PNG-изображений.
+- `PIXI.Sprite` поддерживается в структуре типов, но текущие демонстрационные сцены используют в основном `PIXI.Graphics`.
+- PDF backend доступен только при наличии кастомной сборки CanvasKit в `public/canvaskit`.
+- Hit-test на Skia canvas использует bounding box, поэтому для сильно повернутых объектов область попадания приближенная.
+- Нативная сборка CanvasKit требует Linux/macOS или Docker.
 
 ---
 
-## Поддержка трансформаций
-
-Для каждого `PIXI.DisplayObject` должны корректно применяться все трансформации:
-
-* Translate (смещение);
-* Rotate (поворот);
-* Scale (масштабирование).
-
-Трансформации должны наследоваться через иерархию контейнеров.
-
----
-
-## Пример входной сцены
-
-```ts
-const mainContainer = new PIXI.Container()
-const subContainer = new PIXI.Container()
-
-const g1 = new PIXI.Graphics()
-const g2 = new PIXI.Graphics()
-const g3 = new PIXI.Graphics()
-const g4 = new PIXI.Graphics()
-
-g1.beginFill('#ff0000')
-  .drawEllipse(0, 0, 200, 100)
-  .endFill()
-
-g1.position.set(200, 100)
-g1.angle = 30
-
-g1.on('pointerdown', () => {
-  console.log('g1 pointerdown!')
-})
-
-g2.beginFill('#0000ff')
-  .drawRect(-50, -75, 100, 150)
-  .endFill()
-
-g2.position.set(120, 60)
-g2.angle = 15
-g2.scale.set(1.5, 1.7)
-
-g2.on('pointerup', () => {
-  console.log('g2 pointerup!')
-})
-
-g3.lineStyle(10, '#ffffff', 1)
-  .moveTo(0, 0)
-  .lineTo(150, 100)
-
-g3.angle = -20
-
-g4.lineStyle(10, '#ffff00', 1)
-  .moveTo(0, 70)
-  .lineTo(150, -30)
-
-g4.angle = 20
-
-subContainer.position.set(75, 50)
-subContainer.addChild(g3, g4)
-
-mainContainer.addChild(subContainer, g1, g2)
-
-const convertPixiContainerToSkia = (
-  container: PIXI.Container
-) => {
-  // Реализация отрисовки
-}
-```
-
----
-
-# 2. Экспорт в PDF
-
-Необходимо реализовать экспорт сцены в PDF с использованием **Skia PDF backend**.
-
-## Требования
-
-* PDF должен содержать векторную графику.
-* Недопустимо экспортировать всю сцену как единое растровое изображение.
-* Все объекты `PIXI.Graphics` должны сохраняться как векторные элементы PDF.
-* Исключение: `PIXI.Sprite` допускается экспортировать как bitmap.
-
-## Дополнительно
-
-Для реализации потребуется собрать собственную WASM-версию CanvasKit со включённой поддержкой PDF backend.
-
----
-
-# 3. Интерактивность и события
-
-Необходимо обеспечить поддержку событий:
-
-* `pointerDown`
-* `pointerUp`
-
-для объектов:
-
-```ts
-PIXI.DisplayObject
-```
-
-## Требования
-
-События должны корректно работать:
-
-* на стандартном Pixi Canvas;
-* на канвасе, отрисованном через Skia.
-
----
-
-# 4. Средства тестирования
-
-Необходимо реализовать один из следующих вариантов интерактивности.
-
-## Вариант A. Генерация случайных фигур
-
-Кнопка:
-
-```text
-Сгенерировать случайную линию/фигуру
-```
-
-Должна добавлять в текущий контейнер случайный объект:
-
-* фигуру (`PIXI.Graphics`);
-* либо линию.
-
----
-
-## Вариант B. Переключение сцен
-
-Реализовать переключение между несколькими заранее подготовленными контейнерами.
-
-Переключение может осуществляться:
-
-* кнопками;
-* автоматически через `setTimeout`.
-
----
-
-# Технические требования
-
-## Язык разработки
-
-* TypeScript.
-
-## Используемые библиотеки
-
-### Pixi.js
-
-Версия:
-
-```text
-7.2.4-legacy
-```
-
-При создании приложения необходимо использовать:
-
-```ts
-new PIXI.Application({
-  forceCanvas: true,
-})
-```
-
-### Skia
-
-Использовать CanvasKit.
-
----
-
-## Архитектурные требования
-
-Код должен соответствовать современным стандартам разработки:
-
-* модульная структура проекта;
-* разделение ответственности;
-* использование интерфейсов и типизации TypeScript;
-* наличие комментариев в сложных местах;
-* читаемый и поддерживаемый код.
-
----
-
-# Пользовательский интерфейс
-
-Необходимо реализовать простой UI на HTML/CSS.
-
-Интерфейс должен содержать:
-
-* область просмотра текущей сцены;
-* кнопки управления;
-* кнопку экспорта в PDF;
-* элементы, необходимые для тестирования реализованной интерактивности.
-
----
-
-# Запуск проекта
-
-Проект должен быть легко запускаемым.
-
-Требования:
-
-* использование npm;
-* наличие скриптов запуска;
-* подробная инструкция по запуску.
-
-Пример:
+## Быстрый старт
 
 ```bash
 npm install
 npm run dev
 ```
+
+Откройте:
+
+```text
+http://localhost:5173
+```
+
+Без кастомной WASM-сборки приложение может не загрузить CanvasKit, если в `public/canvaskit` нет файлов:
+
+```text
+public/canvaskit/canvaskit.js
+public/canvaskit/canvaskit.wasm
+```
+
+---
+
+## Команды
+
+```bash
+npm run dev      # запуск dev-сервера Vite
+npm run build    # TypeScript build + Vite production build
+npm run lint     # ESLint
+npm run preview  # preview production-сборки
+```
+
+---
+
+## Структура проекта
+
+```txt
+PixiaKit/
+├── index.html
+├── package.json
+├── tsconfig.json
+├── tsconfig.app.json
+├── tsconfig.node.json
+├── vite.config.ts
+├── eslint.config.mjs
+├── public/
+│   └── canvaskit/
+│       ├── canvaskit.js       ← runtime CanvasKit WASM
+│       └── canvaskit.wasm     ← runtime CanvasKit WASM
+├── src/
+│   ├── main.tsx               ← React entry point
+│   ├── App.tsx                ← главный экран и UI
+│   ├── index.css              ← глобальные стили + Tailwind
+│   ├── App.css                ← legacy styles, если используются
+│   ├── core/                  ← низкоуровневые модули
+│   │   ├── index.ts
+│   │   ├── CanvasKitLoader.ts ← загрузка кастомного CanvasKit
+│   │   ├── EventBridge.ts     ← hit-test и pointer events для Skia canvas
+│   │   ├── SkiaRenderer.ts    ← PIXI.Container → Skia rendering
+│   │   └── SkiaPDFExporter.ts ← экспорт текущей сцены в PDF
+│   ├── hooks/                 ← React hooks
+│   │   ├── index.ts
+│   │   ├── useCanvasKit.ts    ← загрузка CanvasKit
+│   │   ├── useEventBridge.ts  ← подключение EventBridge
+│   │   ├── useLogger.ts       ← хранение логов
+│   │   ├── usePixiSkiaRenderLoop.ts
+│   │   ├── useSceneSwitcher.ts
+│   │   └── useSkiaSurface.ts  ← создание Skia surface
+│   ├── pixi/                  ← Pixi сцены и утилиты
+│   │   ├── index.ts
+│   │   ├── generators.ts      ← drag, случайные фигуры, линии
+│   │   └── scene.ts           ← готовые сцены
+│   └── types/
+│       └── types.ts           ← общие типы Skia/CanvasKit/Pixi
+└── wasm-build/
+    ├── build.sh               ← Bash-сборка CanvasKit с PDF
+    ├── canvaskit.patch        ← патч/описание изменений
+    ├── Dockerfile             ← Docker-сборка
+    ├── out/                   ← результат сборки
+    │   ├── canvaskit.js
+    │   ├── canvaskit.wasm
+    │   ├── index.d.ts
+    │   └── package.json
+    └── README.md              ← инструкция по сборке WASM
+```
+
+---
+
+## Как устроено приложение
+
+### `App.tsx`
+
+Главный компонент отвечает за UI:
+
+- Pixi canvas;
+- Skia output canvas;
+- кнопку добавления случайной фигуры;
+- кнопку экспорта в PDF;
+- кнопки переключения сцен;
+- лог событий.
+
+Основная логика вынесена в hooks.
+
+### `src/core/SkiaRenderer.ts`
+
+Рекурсивно проходит по `PIXI.Container` и рисует каждый `PIXI.DisplayObject` на CanvasKit canvas.
+
+Для `PIXI.Graphics` извлекаются draw calls из `geometry.graphicsData`, после чего они переводятся в Skia:
+
+- прямоугольники — `drawRect`;
+- эллипсы — `drawOval`;
+- линии/полигоны — `drawPath`.
+
+Трансформации применяются через `PIXI.DisplayObject.localTransform`.
+
+### `src/core/SkiaPDFExporter.ts`
+
+Экспортирует текущую сцену в PDF:
+
+1. Проверяет наличие PDF backend в CanvasKit.
+2. Создает PDF document через `MakePDFDocument`.
+3. Открывает страницу через `_pdf_beginPage`.
+4. Рисует белый фон.
+5. Вызывает `renderPixiContainerToSkia`.
+6. Закрывает PDF и скачивает файл.
+
+`PIXI.Graphics` сохраняются как векторные элементы PDF.
+
+### `src/core/EventBridge.ts`
+
+Skia canvas после отрисовки — обычный DOM canvas, поэтому Pixi events на нем автоматически не работают.
+
+`EventBridge` делает hit-test по координатам клика на Skia canvas и вызывает логику событий Pixi-объектов.
+
+### `src/pixi/scene.ts`
+
+Содержит готовые сцены:
+
+- `createScene1` — пример из задания;
+- `createScene2` — набор фигур для проверки рендера;
+- `createScene3` — сетка прямоугольников.
+
+### `src/pixi/generators.ts`
+
+Содержит утилиты:
+
+- `makeDraggable`;
+- `addRandomObject`;
+- `addRandomGraphics`;
+- `addRandomLine`;
+- `setupContainerInteraction`;
+- `makeGroupDraggable`.
+
+### `src/hooks/*`
+
+Hooks разделяют ответственность приложения:
+
+- `useCanvasKit` — загрузка CanvasKit;
+- `useSkiaSurface` — создание Skia surface;
+- `usePixiSkiaRenderLoop` — создание Pixi app и общий render loop;
+- `useSceneSwitcher` — переключение сцен;
+- `useEventBridge` — подключение hit-test к Skia canvas;
+- `useLogger` — хранение и добавление логов.
+
+---
+
+## CanvasKit и PDF backend
+
+Стандартный npm-пакет `canvaskit-wasm` не включает PDF backend.
+
+Для экспорта в PDF проект использует кастомную WASM-сборку CanvasKit.
+
+Runtime-файлы должны лежать здесь:
+
+```txt
+public/canvaskit/canvaskit.js
+public/canvaskit/canvaskit.wasm
+```
+
+Загрузчик находится в:
+
+```txt
+src/core/CanvasKitLoader.ts
+```
+
+Он загружает CanvasKit через:
+
+```ts
+CanvasKitInit({
+  locateFile: (file: string) => `${import.meta.env.BASE_URL}canvaskit/${file}`,
+})
+```
+
+Vite alias для локальной сборки настроен в `vite.config.ts`:
+
+```ts
+alias: {
+  '@warmBuild': fileURLToPath(new URL('wasm-build/out/canvaskit.js', import.meta.url')),
+  'wasmBuild': fileURLToPath(new URL('wasm-build/out', import.meta.url')),
+}
+```
+
+---
+
+## Сборка кастомного CanvasKit WASM
+
+Подробная инструкция находится в:
+
+```txt
+wasm-build/README.md
+```
+
+Кратко:
+
+### Docker
+
+```powershell
+docker build -t pixiakit-wasm-builder .\wasm-build
+
+docker run --rm `
+  -v "${PWD}\wasm-build\out:/output" `
+  pixiakit-wasm-builder
+```
+
+Затем:
+
+```powershell
+New-Item -ItemType Directory -Force public/canvaskit
+Copy-Item wasm-build/out/canvaskit.js public/canvaskit/canvaskit.js
+Copy-Item wasm-build/out/canvaskit.wasm public/canvaskit/canvaskit.wasm
+```
+
+### Bash
+
+```bash
+cd wasm-build
+chmod +x build.sh
+./build.sh
+```
+
+После сборки скопируйте файлы из `wasm-build/out/` в `public/canvaskit/`.
+
+---
+
+## Как проверить работу
+
+1. Запустить проект:
+
+   ```bash
+   npm run dev
+   ```
+
+2. Открыть `http://localhost:5173`.
+
+3. Проверить, что:
+
+   - Pixi canvas отображает сцену;
+   - Skia canvas отображает такую же сцену;
+   - объекты можно перетаскивать на Pixi canvas;
+   - клики по Skia canvas попадают в лог через `EventBridge`;
+   - кнопка `Add random shape` добавляет новую фигуру или линию;
+   - кнопки сцен переключают текущий контейнер;
+   - кнопка `Export PDF` скачивает PDF-файл.
+
+4. В логах приложения должно быть сообщение, похожее на:
+
+   ```txt
+   CanvasKit loaded with PDF support
+   ```
+
+---
+
+## Технологический стек
+
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- Pixi.js Legacy 7.2.4
+- CanvasKit / Skia WASM
+- ESLint + Prettier
+- Docker для сборки WASM
+
 
 или
 

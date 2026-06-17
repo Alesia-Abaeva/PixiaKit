@@ -1,89 +1,112 @@
-# PixiaKit
+# wasm-build
 
-**PIXI.js → Skia (CanvasKit) → PDF**
+Эта папка содержит инструменты для сборки **кастомного CanvasKit WASM** с поддержкой PDF backend.
 
-Приложение рендерит `PIXI.Container` через Skia CanvasKit и экспортирует сцену в векторный PDF.
+Стандартный пакет `canvaskit-wasm` из npm не включает PDF backend. Поэтому для экспорта в PDF проект использует отдельную WASM-сборку CanvasKit, собранную из Skia.
+
+---
+
+## Что лежит в папке
+
+```txt
+wasm-build/
+├── build.sh             ← Bash-скрипт сборки CanvasKit с PDF
+├── canvaskit.patch      ← патч/описание изменений для CanvasKit/Skia
+├── Dockerfile           ← Docker-образ для воспроизводимой сборки
+├── out/                 ← результат сборки
+│   ├── canvaskit.js
+│   ├── canvaskit.wasm
+│   ├── index.d.ts
+│   └── package.json
+└── README.md            ← этот файл
+```
 
 ---
 
 ## Быстрый старт
 
-```bash
-npm install
+Если нужны только готовые артефакты из `wasm-build/out`, скопируй их в `public/canvaskit`:
+
+### PowerShell
+
+```powershell
+New-Item -ItemType Directory -Force public/canvaskit
+Copy-Item wasm-build/out/canvaskit.js public/canvaskit/canvaskit.js
+Copy-Item wasm-build/out/canvaskit.wasm public/canvaskit/canvaskit.wasm
+```
+
+После этого запусти dev-сервер:
+
+```powershell
 npm run dev
 ```
 
-Откройте [http://localhost:5173](http://localhost:5173).
+Приложение загрузит CanvasKit из:
 
-> **Примечание:** PDF-экспорт требует кастомной WASM-сборки (см. ниже).  
-> Без неё PIXI-рендер и Skia-canvas работают полностью.
-
----
-
-## Структура проекта
-
-```
-pixiakit/
-├── index.html
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── wasm-build/
-│   ├── build.sh          ← скрипт сборки WASM (Linux/macOS)
-│   └── Dockerfile        ← Docker-вариант сборки
-└── src/
-    ├── main.tsx           ← React entry point
-    ├── App.tsx            ← главный компонент
-    ├── index.css
-    ├── core/
-    │   ├── CanvasKitLoader.ts   ← умный загрузчик (кастомный / npm fallback)
-    │   ├── SkiaRenderer.ts      ← PIXI → Skia обёртка
-    │   ├── SkiaPDFExporter.ts   ← экспорт в PDF
-    │   └── EventBridge.ts       ← pointerdown/pointerup на Skia canvas
-    └── pixi/
-        ├── scene.ts       ← 3 готовые сцены
-        └── generators.ts  ← генератор случайных фигур
+```txt
+/canvaskit/canvaskit.js
+/canvaskit/canvaskit.wasm
 ```
 
 ---
 
-## Компиляция кастомного CanvasKit с PDF-бэкендом
+## Вариант A — Docker-сборка
 
-Стандартный `canvaskit-wasm` из npm **не включает PDF backend**.  
-Чтобы получить `MakePDFDocument`, нужно скомпилировать Skia самостоятельно.
+Docker-сборка рекомендуется, если нужно повторить сборку в чистой Linux-среде.
 
-### Вариант А — Docker (рекомендуется, работает везде)
+### 1. Собрать образ
 
-```bash
-cd wasm-build
-
-# Собрать образ (занимает 20–40 мин при первом запуске)
-docker build -t pixiakit-wasm-builder .
-
-# Запустить сборку, результат появится в ./out/
-docker run --rm -v $(pwd)/out:/build/out pixiakit-wasm-builder
-
-# Скопировать в проект
-mkdir -p ../public/canvaskit
-cp out/canvaskit.js  ../public/canvaskit/
-cp out/canvaskit.wasm ../public/canvaskit/
+```powershell
+docker build -t pixiakit-wasm-builder .\wasm-build
 ```
 
-### Вариант Б — Нативная сборка (Linux / macOS)
+### 2. Запустить сборку
 
-#### 1. Установите зависимости
-
-**macOS:**
-```bash
-brew install ninja cmake python3 git
+```powershell
+docker run --rm `
+  -v "${PWD}\wasm-build\out:/output" `
+  pixiakit-wasm-builder
 ```
 
-**Ubuntu / Debian:**
-```bash
-sudo apt-get install -y git python3 ninja-build cmake curl xz-utils
+Результат появится в:
+
+```txt
+wasm-build/out/
 ```
 
-#### 2. Запустите скрипт сборки
+### 3. Скопировать артефакты в проект
+
+```powershell
+New-Item -ItemType Directory -Force public/canvaskit
+Copy-Item wasm-build/out/canvaskit.js public/canvaskit/canvaskit.js
+Copy-Item wasm-build/out/canvaskit.wasm public/canvaskit/canvaskit.wasm
+```
+
+---
+
+## Вариант B — нативная Bash-сборка
+
+Этот вариант работает в Linux/macOS-среде, где доступен Bash.
+
+### 1. Установить зависимости
+
+Для Ubuntu/Debian:
+
+```bash
+sudo apt-get install -y \
+  git \
+  python3 \
+  python3-pip \
+  ninja-build \
+  cmake \
+  curl \
+  wget \
+  xz-utils \
+  ca-certificates \
+  libglib2.0-dev
+```
+
+### 2. Запустить сборку
 
 ```bash
 cd wasm-build
@@ -91,94 +114,105 @@ chmod +x build.sh
 ./build.sh
 ```
 
-Скрипт автоматически:
-- Установит Emscripten SDK 3.1.44
-- Клонирует Skia ветку `chrome/m114`
-- Синхронизирует зависимости Skia
-- Скомпилирует CanvasKit с флагом `pdf`
-- Положит результат в `wasm-build/out/`
+По умолчанию результат будет записан в:
 
-#### 3. Скопируйте результат в проект
-
-```bash
-mkdir -p public/canvaskit
-cp wasm-build/out/canvaskit.js   public/canvaskit/
-cp wasm-build/out/canvaskit.wasm public/canvaskit/
+```txt
+wasm-build/out/
 ```
 
-#### 4. Перезапустите dev-сервер
-
-```bash
-npm run dev
-```
-
-Кнопка **"⬇ Export PDF"** станет активной автоматически — `CanvasKitLoader` обнаружит файлы в `/canvaskit/` и использует кастомную сборку.
+или в Docker-контейнере — в `/output`.
 
 ---
 
-## Как это работает
+## Что делает `build.sh`
 
-### CanvasKitLoader (умный загрузчик)
+Скрипт выполняет 5 шагов:
 
-При старте приложения:
+1. Клонирует Skia в `/build/skia`.
+2. Патчит `DEPS`, чтобы пропустить тяжёлые зависимости `dawn` и `swiftshader`.
+3. Синхронизирует зависимости Skia.
+4. Применяет PDF patch к `canvaskit_bindings.cpp`.
+5. Собирает CanvasKit с флагом PDF и копирует артефакты в выходную папку.
 
-```
-1. Проверяет наличие /canvaskit/canvaskit.js (HEAD-запрос)
-   ├── Найден → загружает кастомную сборку (PDF ✓)
-   └── Не найден → загружает npm canvaskit-wasm (PDF ✗, но рендер работает)
-```
+Ключевые изменения сборки:
 
-### SkiaRenderer (PIXI → Skia)
-
-Рекурсивно обходит дерево `PIXI.Container`:
-
-```
-PIXI.Container
-  └── apply transform (translate → rotate → scale)
-      ├── PIXI.Graphics → extractDrawCalls() → renderDrawCall()
-      │     └── geometry.graphicsData → Skia Path / Oval / Rect
-      ├── PIXI.Sprite → renderSprite()
-      │     └── читает пиксели из HTMLImageElement → ck.MakeImage()
-      └── PIXI.Container → рекурсия
-```
-
-### SkiaPDFExporter
-
-```
-ck.MakePDFDocument()        ← Skia PDF backend
-  └── doc.beginPage(w, h)   ← получаем Skia canvas
-       └── renderPixiContainerToSkia()  ← те же вызовы, что и для экрана
-  └── doc.endPage()
-  └── doc.close()           ← Uint8Array с PDF-байтами
-```
-
-PDF получается **векторным**: все `PIXI.Graphics` → PDF paths, `PIXI.Sprite` → bitmap.
-
-### EventBridge (события)
-
-```
-Skia canvas (DOM element)
-  └── pointerdown / pointerup listener
-       └── getBoundingClientRect() → координаты клика
-            └── для каждого зарегистрированного PIXI.DisplayObject
-                 └── getBounds() → AABB hit-test
-                      └── obj.emit('pointerdown', event)
+```bash
+sed -i 's/skia_enable_pdf=false/skia_enable_pdf=true/' compile.sh
+bash compile.sh is_debug=false extra_cflags='["-DCK_ENABLE_PDF"]'
 ```
 
 ---
 
-## Размер WASM и время сборки
+## Что делает PDF patch
 
-| | Файл | Размер | Время сборки |
-|---|---|---|---|
-| npm (без PDF) | canvaskit.wasm | ~8 MB | — |
-| кастомный (с PDF) | canvaskit.wasm | ~9–10 MB | 20–40 мин |
+В `canvaskit_bindings.cpp` добавляются binding-функции:
+
+```cpp
+MakePDFDocument
+_pdf_beginPage
+_pdf_endPage
+_pdf_close
+_pdf_getData
+```
+
+Они доступны в собранном CanvasKit как:
+
+```ts
+ck.MakePDFDocument(...)
+ck._pdf_beginPage(...)
+ck._pdf_endPage(...)
+ck._pdf_close(...)
+ck._pdf_getData(...)
+```
+
+---
+
+## Как проект использует собранную сборку
+
+В `vite.config.ts` настроен alias:
+
+```ts
+alias: {
+  '@warmBuild': fileURLToPath(new URL('wasm-build/out/canvaskit.js', import.meta.url)),
+  'wasmBuild': fileURLToPath(new URL('wasm-build/out', import.meta.url)),
+}
+```
+
+`src/core/CanvasKitLoader.ts` загружает CanvasKit из публичной папки:
+
+```ts
+CanvasKitInit({
+  locateFile: (file: string) => `${import.meta.env.BASE_URL}canvaskit/${file}`,
+})
+```
+
+То есть runtime-файлы должны лежать здесь:
+
+```txt
+public/canvaskit/canvaskit.js
+public/canvaskit/canvaskit.wasm
+```
+
+---
+
+## Проверка PDF support
+
+После запуска приложения проверь логи в браузере.
+
+Если всё работает, должно быть что-то вроде:
+
+```txt
+CanvasKit loaded with PDF support
+```
+
+Кнопка **Export PDF** должна скачивать файл `pixiakit-scene.pdf`.
 
 ---
 
 ## Известные ограничения
 
-- **`moveTo` / `lineTo` в PIXI.Graphics** — PIXI v7 хранит линии как `PIXI.SHAPES.POLY` с массивом точек. Они корректно рендерятся через Skia Path.
-- **Hit-test** — используется AABB (ось-выровненный прямоугольник). Для сильно повёрнутых объектов область клика приблизительная.
-- **Sprites в PDF** — встраиваются как растровые изображения (по условию задания).
-- **`forceCanvas: true`** — указан при создании PIXI.Application согласно требованиям.
+- Сборка Skia может занимать 20–40 минут при первом запуске.
+- `./emsdk install latest` может со временем сломаться из-за изменения `latest`. Для стабильной сборки лучше зафиксировать конкретную версию Emscripten.
+- PDF backend требует кастомной сборки. Обычный `canvaskit-wasm` из npm PDF не поддерживает.
+- `PIXI.Sprite` экспортируется как bitmap, `PIXI.Graphics` — как векторные пути/прямоугольники/овалы.
+
