@@ -1,15 +1,13 @@
-import CanvasKitInit from 'canvaskit-wasm'
+import type { CanvasKit } from '@warmBuild'
 import * as PIXI from 'pixi.js-legacy'
 import React from 'react'
 
 import { loadCanvasKit } from './core/CanvasKitLoader'
-// import { loadCanvasKit } from './core/CanvasKitLoader'
 import { EventBridge } from './core/EventBridge'
 import { exportAndDownloadPDF } from './core/SkiaPDFExporter'
 import { renderPixiContainerToSkia } from './core/SkiaRenderer'
 import { addRandomObject } from './pixi/generators'
 import { SCENES } from './pixi/scene'
-import type { CanvasKit } from './types/types'
 
 const CANVAS_WIDTH = 600
 const CANVAS_HEIGHT = 400
@@ -141,31 +139,33 @@ export default function App() {
   React.useEffect(() => {
     let disposed = false
 
-    loadCanvasKit().then(({ ck, hasPDF }) => {
-      console.log('CanvasKit loaded, PDF support:', hasPDF)
+    ;(async () => {
+      try {
+        const instance = await loadCanvasKit()
 
-      if (!disposed) {
-        setCanvasKit(ck)
+        if (disposed) return
+
+        console.log('CanvasKit loaded, PDF support:', instance.MakePDFDocument ? 'yes' : 'no')
+        setCanvasKit(instance)
         addLog(
-          hasPDF ? 'CanvasKit loaded with PDF support' : 'CanvasKit loaded without PDF support'
+          instance.MakePDFDocument
+            ? 'CanvasKit loaded with PDF support'
+            : 'CanvasKit loaded without PDF support'
+        )
+      } catch (error) {
+        if (disposed) return
+
+        console.error('Failed to load CanvasKit:', error)
+        addLog(
+          'Failed to load CanvasKit: ' + (error instanceof Error ? error.message : String(error))
         )
       }
-    })
+    })()
 
-    // CanvasKitInit({
-    //   locateFile: (file) => {
-    //     return `/canvaskit/${file}`
-    //   },
-    // }).then((loadedCanvasKit) => {
-    //   if (!disposed) {
-    //     setCanvasKit(loadedCanvasKit)
-    //     addLog('CanvasKit loaded')
-    //   }
-    // })
     return () => {
       disposed = true
     }
-  }, [addLog])
+  }, [])
 
   /**
    * 3. Создаём Skia surface
@@ -293,10 +293,9 @@ export default function App() {
     addLog(`Added random ${kind}`)
   }
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     if (!canvasKit || !currentScene) return
-
-    const error = exportAndDownloadPDF(
+    const error = await exportAndDownloadPDF(
       {
         ck: canvasKit,
         container: currentScene,

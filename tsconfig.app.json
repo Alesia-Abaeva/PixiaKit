@@ -24,8 +24,10 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@warmBuild/*": ["./wasm-build/out/*"],
+      "@warmBuild": ["./wasm-build/out"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "wasm-build/out"]
 }

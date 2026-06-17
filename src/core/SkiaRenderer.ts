@@ -1,6 +1,7 @@
+import type { CanvasKit, Path } from '@warmBuild'
 import * as PIXI from 'pixi.js-legacy'
 
-import type { CanvasKit, DrawCall, SkCanvas, SkiaRendererOptions, SkPath } from '../types/types'
+import type { DrawCall, SkCanvas, SkiaRendererOptions } from '../types/types'
 
 /**
  * Конвертирует цвет Pixi в CanvasKit Color4f.
@@ -168,6 +169,41 @@ function extractDrawCalls(graphics: PIXI.Graphics): DrawCall[] {
 }
 
 /**
+ * Создает путь из точек используя PathBuilder
+ */
+function createPathFromPoints(ck: CanvasKit, points: number[], closed: boolean): Path | null {
+  if (points.length < 2) {
+    return null
+  }
+
+  try {
+    // Создаем PathBuilder
+    const pathBuilder = new ck.PathBuilder()
+
+    // Начинаем с moveTo
+    pathBuilder.moveTo(points[0], points[1])
+
+    // Добавляем lineTo для остальных точек
+    for (let i = 2; i < points.length; i += 2) {
+      pathBuilder.lineTo(points[i], points[i + 1])
+    }
+
+    // Закрываем путь если нужно
+    if (closed) {
+      pathBuilder.close()
+    }
+
+    // Создаем immutable Path и удаляем builder
+    const path = pathBuilder.detachAndDelete()
+
+    return path
+  } catch (error) {
+    console.error('Error creating path:', error)
+    return null
+  }
+}
+
+/**
  * Рисует один draw call.
  */
 function renderDrawCall(ck: CanvasKit, canvas: SkCanvas, call: DrawCall): void {
@@ -205,21 +241,15 @@ function renderDrawCall(ck: CanvasKit, canvas: SkCanvas, call: DrawCall): void {
   }
 
   if (call.shape.kind === 'polygon' || call.shape.kind === 'polyline') {
-    const path = new ck.Path() as unknown as SkPath
-    const points = call.shape.points
+    // const path = new ck.Path() as unknown as SkPath
+    // const points = call.shape.points
+    const isClosed = call.shape.kind === 'polygon'
+    const path = createPathFromPoints(ck, call.shape.points, isClosed)
 
-    path.moveTo(points[0], points[1])
-
-    for (let index = 2; index < points.length; index += 2) {
-      path.lineTo(points[index], points[index + 1])
+    if (path) {
+      canvas.drawPath(path, paint)
+      path.delete() // Очищаем память
     }
-
-    if (call.shape.kind === 'polygon') {
-      path.close()
-    }
-
-    canvas.drawPath(path as unknown as Parameters<typeof canvas.drawPath>[0], paint)
-    path.delete()
   }
 
   paint.delete()

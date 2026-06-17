@@ -1,7 +1,9 @@
-import type CanvasKitInit from 'canvaskit-wasm'
+import type { CanvasKit, Path, PathBuilder } from '@warmBuild'
 import * as PIXI from 'pixi.js-legacy'
 
-export type CanvasKit = Awaited<ReturnType<typeof CanvasKitInit>>
+// Экспортируем типы из CanvasKit для удобства
+export type { CanvasKit, Path, PathBuilder }
+
 export type SkSurface = ReturnType<CanvasKit['MakeSWCanvasSurface']>
 export type SkCanvas = ReturnType<NonNullable<SkSurface>['getCanvas']>
 
@@ -10,35 +12,13 @@ export interface SkiaRendererOptions {
   canvas: SkCanvas
 }
 
-export interface SkPath {
-  moveTo(x: number, y: number): SkPath
-  lineTo(x: number, y: number): SkPath
-  close(): SkPath
-  delete(): void
-}
-
-export interface SkPathBuilderLike {
-  moveTo(x: number, y: number): SkPathBuilderLike
-  lineTo(x: number, y: number): SkPathBuilderLike
-  close(): SkPathBuilderLike
-  detachAndDelete(): SkPathLike
-  delete(): void
-}
-
-export interface SkPathLike {
-  delete(): void
-}
-
-export interface SkImageLike {
-  delete(): void
-}
-
 export type BaseTextureWithSource = PIXI.BaseTexture & {
   resource: {
     source?: HTMLImageElement | HTMLCanvasElement
   }
 }
 
+// Типы для фигур
 export type Shape =
   | {
       kind: 'rect'

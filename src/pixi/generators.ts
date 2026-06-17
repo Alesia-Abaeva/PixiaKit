@@ -80,8 +80,6 @@ export function addRandomGraphics(container: PIXI.Container): void {
 
   graphics.beginFill(fill, alpha)
 
-  // const x = rand(0, 520)
-  // const y = rand(0, 360)
   const size = 30 + Math.random() * 80
 
   if (Math.random() > 0.5) {
@@ -96,7 +94,6 @@ export function addRandomGraphics(container: PIXI.Container): void {
   graphics.angle = Math.random() * 360
   graphics.scale.set(0.75 + Math.random() * 1.5)
 
-  // Обновляем hitArea после установки всех свойств
   updateHitArea(graphics)
 
   container.addChild(graphics)
@@ -118,8 +115,6 @@ export function addRandomLine(container: PIXI.Container): void {
   line.position.set(rand(0, 520), rand(0, 360))
   line.angle = Math.random() * 360
 
-  // Для линии создаем hitArea на основе bounding box
-  // const bounds = line.getBounds()
   line.hitArea = new PIXI.Rectangle(-10, -10, Math.abs(endX) + 20, Math.abs(endY) + 20)
 
   container.addChild(line)
@@ -145,8 +140,6 @@ export function makeGroupDraggable(targetContainer: PIXI.Container): void {
   let dragging = false
   let dragPosition: { x: number; y: number } | null = null
 
-  // Сам контейнер тоже должен быть eventMode='dynamic', чтобы дочерние
-  // события могли всплывать и чтобы клик прямо по контейнеру тоже работал.
   targetContainer.eventMode = 'dynamic'
   targetContainer.cursor = 'pointer'
 
@@ -154,9 +147,6 @@ export function makeGroupDraggable(targetContainer: PIXI.Container): void {
     dragging = true
     dragPosition = event.global.clone()
 
-    // Поднимаем всю машину наверх z-order относительно её родителя (root),
-    // а не относительно самой себя — иначе setChildIndex упадёт, т.к.
-    // у targetContainer.parent могут быть другие сцены/декорации (дорога).
     targetContainer.parent?.setChildIndex(
       targetContainer,
       targetContainer.parent.children.length - 1
@@ -172,8 +162,6 @@ export function makeGroupDraggable(targetContainer: PIXI.Container): void {
     const dx = newPosition.x - dragPosition.x
     const dy = newPosition.y - dragPosition.y
 
-    // ВАЖНО: двигаем targetContainer (всю машину), а не event.currentTarget
-    // (конкретную деталь, по которой кликнули).
     targetContainer.position.x += dx
     targetContainer.position.y += dy
 
@@ -185,16 +173,11 @@ export function makeGroupDraggable(targetContainer: PIXI.Container): void {
     dragPosition = null
   }
 
-  // Навешиваем обработчики на сам контейнер...
   targetContainer.on('pointerdown', onPointerDown)
   targetContainer.on('globalpointermove', onPointerMove)
   targetContainer.on('pointerup', onPointerUp)
   targetContainer.on('pointerupoutside', onPointerUp)
 
-  // ...и на каждого текущего ребёнка — чтобы клик по детали тоже стартовал drag.
-  // Дочерние объекты получают eventMode и те же обработчики,
-  // но event.stopPropagation() в onPointerDown не используется здесь —
-  // событие должно дойти и сработать сразу на уровне ребёнка.
   for (const child of targetContainer.children) {
     enableChildAsDragHandle(child, onPointerDown, onPointerMove, onPointerUp)
   }
@@ -215,9 +198,6 @@ function enableChildAsDragHandle(
   child.on('pointerup', onPointerUp)
   child.on('pointerupoutside', onPointerUp)
 
-  // Если ребёнок сам Container (например wheelFront с tire/rim/hub внутри),
-  // рекурсивно включаем то же самое для его собственных детей —
-  // иначе клик по диску колеса (rim) внутри wheelFront не сработает.
   if (child instanceof PIXI.Container) {
     for (const grandchild of child.children) {
       enableChildAsDragHandle(grandchild, onPointerDown, onPointerMove, onPointerUp)
