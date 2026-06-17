@@ -116,45 +116,51 @@ export default function App() {
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold pb-5">Skia output canvas</h2>
-          <div>
-            <canvas
-              width={CANVAS_WIDTH}
-              height={CANVAS_HEIGHT}
-              ref={skiaCanvasRef}
-              style={{ border: '1px solid #333' }}
-            />
+          <h2 className="text-xl font-semibold pb-5 ">Skia output canvas</h2>
+          <div className="border border-neutral-700 ">
+            <canvas width={CANVAS_WIDTH} height={CANVAS_HEIGHT} ref={skiaCanvasRef} />
           </div>
         </section>
       </section>
 
-      <div className="pt-15 flex gap-2 flex-cols m-auto">
-        <button className="button" onClick={handleAddRandomObject}>
-          Add random shape
-        </button>
-
-        <button className="button" onClick={handleExportPdf}>
-          Export PDF
-        </button>
-
-        {SCENES.map((scene, index) => (
-          <button
-            key={scene.label}
-            type="button"
-            className="button"
-            onClick={() => setCurrentSceneIndex(index)}
-          >
-            {scene.label}
+      <div className="pt-15 flex gap-2 flex-cols justify-between items-center">
+        <div className=" flex gap-2 flex-cols justify-center items-center">
+          <button className="button border border-gray-600" onClick={handleAddRandomObject}>
+            + Add random shape
           </button>
-        ))}
+          <button className="button border border-gray-600" onClick={handleExportPdf}>
+            Export PDF
+          </button>
+        </div>
+
+        <div className=" flex gap-2 flex-cols justify-center items-center">
+          {SCENES.map((scene, index) => (
+            <button
+              key={scene.label}
+              type="button"
+              className="button"
+              onClick={() => setCurrentSceneIndex(index)}
+            >
+              {scene.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <section className="bg-neutral-900 text-neutral-300 p-4 mt-15 rounded-md">
-        <p className="text-xl pb-1">CanvasKit: {canvasKit ? 'loaded' : 'loading...'}</p>
+      <section className="text-neutral-300 p-4 mt-15 rounded-md w-max ">
+        <p className="text-xl ">
+          CanvasKit LOGS{' '}
+          <span className={`text-sm ${canvasKit ? 'text-green-700' : 'text-red-500'}`}>
+            status: [{canvasKit ? 'loaded' : 'loading...'}]
+          </span>
+        </p>
 
-        <ul>
+        <ul className="text-sm pt-2 p-10 max-h-60 overflow-y-auto border border-neutral-700 ">
           {logs.map((log, index) => (
-            <li key={`${log}-${index}`}>{log}</li>
+            <li key={`${log}-${index}`} className="text-left">
+              <span className="text-gray-500">[{log.formattedTime}]</span>
+              <span className="ml-2 text-neutral-200">{log.message}</span>
+            </li>
           ))}
         </ul>
       </section>
